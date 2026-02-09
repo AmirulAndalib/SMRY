@@ -87,6 +87,10 @@ export interface ZeroClickFetchResult {
 export async function fetchOffers(
   opts: ZeroClickFetchOptions
 ): Promise<ZeroClickFetchResult> {
+  if (!env.ZEROCLICK_API_KEY) {
+    return { offers: [], durationMs: 0 };
+  }
+
   const startTime = Date.now();
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), ZEROCLICK_TIMEOUT_MS);
