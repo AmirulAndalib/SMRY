@@ -133,7 +133,7 @@ Users are grouped by `plan_tier` (`"premium"` or `"free"`), enabling plan-level 
 | Event | Trigger | Properties |
 |-------|---------|------------|
 | `article_loaded` | Article data received | `source`, `article_title`, `article_url`, `hostname` |
-| `article_error` | Fetch failed | `error_message`, `article_url`, `hostname` |
+| `article_error` | Fetch failed | `error_name`, `article_url`, `hostname` |
 | `chat_opened` | Chat panel opened | `hostname` |
 | `settings_opened` | Settings drawer opened | — |
 | `setting_changed` | View mode changed | `setting`, `value` |
@@ -195,8 +195,9 @@ Ad impressions and clicks are tracked **client-side** via PostHog JS SDK for rel
 
 | Event | Trigger | Properties |
 |-------|---------|------------|
-| `tts_played` | Play pressed | `voice`, `article_url` |
-| `tts_paused` | Pause pressed | `article_url` |
+| `tts_requested` | TTS load button pressed | `voice`, `article_url` |
+| `tts_played` | Playback actually starts/resumes | `playback_position`, `voice` |
+| `tts_paused` | Pause pressed | `playback_position`, `voice` |
 | `tts_voice_changed` | Voice selector | `from_voice`, `to_voice` |
 
 ### Feature Adoption (`feature_used`)

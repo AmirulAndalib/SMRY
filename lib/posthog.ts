@@ -123,13 +123,16 @@ export function trackEvent(event: Partial<AnalyticsEvent>): void {
   const posthog = getClient();
   if (!posthog) return;
 
-  const distinctId = event.request_id || `req_${crypto.randomUUID().slice(0, 8)}`;
+  // Use client_ip to group requests by user, not request_id which creates a new "person" per request
+  const distinctId = event.client_ip || event.request_id || `req_${crypto.randomUUID().slice(0, 8)}`;
 
   posthog.capture({
     distinctId,
     event: "request_event",
     properties: {
       ...event,
+      // $ip enables PostHog's automatic geo resolution (country, city, etc.)
+      $ip: event.client_ip,
       timestamp: event.timestamp || new Date().toISOString(),
     },
   });

@@ -30,6 +30,7 @@ export type AnalyticsEvent =
   // Settings
   | "setting_changed"
   // TTS
+  | "tts_requested"
   | "tts_played"
   | "tts_paused"
   | "tts_voice_changed";

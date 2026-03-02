@@ -421,8 +421,11 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
     const minutes = timeRangeMinutes[timeRange] || 1440;
     const hours = Math.ceil(minutes / 60);
 
+    // Escape helper for HogQL string interpolation (defined early so all filters can use it)
+    const escapeHogQL = (str: string) => str.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+
     // Ad-specific filters
-    const adDeviceFilter = query.adDevice || ""; // "mobile", "tablet", "desktop"
+    const adDeviceFilter = query.adDevice ? escapeHogQL(query.adDevice) : "";
 
     // Parse filters
     const hostnameFilter = query.hostname || "";
@@ -721,7 +724,7 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
             properties.hostname as hostname,
             count() AS total_requests,
             uniq(properties.source) AS sources_tried,
-            arrayStringConcat(groupArray(DISTINCT properties.source), ', ') AS sources_list,
+            arrayStringConcat(arrayDistinct(groupArray(properties.source)), ', ') AS sources_list,
             round(countIf(properties.outcome = 'success') / count() * 100, 2) AS overall_success_rate,
             any(properties.url) AS sample_url
           FROM events

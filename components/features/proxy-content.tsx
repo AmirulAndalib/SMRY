@@ -1275,7 +1275,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
   useEffect(() => {
     if (articleQuery.error) {
       trackArticle("article_error", url, {
-        error_message: articleQuery.error.message,
+        error_name: articleQuery.error.name || "Error",
       });
     }
   }, [articleQuery.error, url, trackArticle]);
@@ -1294,7 +1294,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
     } else {
       setTTSOpen(true);
       t.load();
-      track("tts_played", { voice: t.voice, article_url: url });
+      track("tts_requested", { voice: t.voice, article_url: url });
       markFeatureUsed("tts");
     }
   }, [track, markFeatureUsed, url]);
