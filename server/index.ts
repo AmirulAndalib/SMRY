@@ -120,8 +120,8 @@ const app = new Elysia({ adapter: node() })
     set.status = 500;
     return { error: "Internal server error", type: "INTERNAL_ERROR" };
   })
-  .listen(env.API_PORT);
+  .listen({ port: env.API_PORT, hostname: "0.0.0.0" });
 
-console.log(`🦊 Elysia API server running at http://localhost:${env.API_PORT}`);
+console.log(`🦊 Elysia API server running at http://0.0.0.0:${env.API_PORT}`);
 
 export type App = typeof app;

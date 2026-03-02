@@ -2,8 +2,8 @@
  * Ad Routes - POST /api/context, POST /api/px
  *
  * /api/context - Fetches contextual ads. ZeroClick is primary, Gravity is fallback.
- * /api/px - Unified tracking for impressions, clicks, dismissals.
- *           For impressions, wraps Gravity forwarding + ClickHouse logging atomically.
+ * /api/px - Gravity impression forwarding (billing) + server-side billing confirmation tracking.
+ *           Client-side PostHog JS handles impression/click analytics.
  *
  * Endpoint names are neutral to avoid content blockers (no "ad" or "track" in names).
  */
@@ -13,7 +13,7 @@ import { getAuthInfo } from "../middleware/auth";
 import { env } from "../env";
 import { extractClientIp } from "../../lib/request-context";
 import { createLogger } from "../../lib/logger";
-import { trackAdEvent, type AdEventStatus } from "../../lib/clickhouse";
+import { trackAdEvent, type AdEventStatus } from "../../lib/posthog";
 import {
   fetchZeroClickOffers,
   mapZeroClickOfferToAd,
@@ -140,7 +140,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
    * Unified tracking endpoint for impressions, clicks, and dismissals.
    *
    * CRITICAL: For impressions, this endpoint WRAPS the Gravity impression pixel call.
-   * This ensures ClickHouse accurately reflects whether Gravity received the impression.
+   * This ensures PostHog accurately reflects whether Gravity received the impression.
    * Without this, we'd log impressions locally without knowing if we got paid.
    *
    * Named "/px" to avoid ad blocker detection (no "ad" or "track" in the name).
@@ -148,12 +148,12 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
   .post(
     "/px",
     async ({ body, set }) => {
-      const { type, sessionId, hostname, brandName, adTitle, adText, clickUrl, impUrl, cta, favicon, deviceType, os, browser, adProvider } = body;
+      const { type, sessionId, hostname, brandName, adTitle, adText, clickUrl, impUrl, cta, favicon, deviceType, os, browser, adProvider: _adProvider, placement, adIndex } = body;
 
       // Derive provider from impUrl prefix only — never trust client-sent adProvider
       // for forwarding decisions (prevents spoofing to skip Gravity billing)
       const isZeroClick = impUrl?.startsWith("zeroclick://") ?? false;
-      // adProvider from client is used only for ClickHouse logging, not forwarding logic
+      // adProvider from client is used only for PostHog logging, not forwarding logic
       const provider = isZeroClick ? "zeroclick" : "gravity";
 
       // For impressions with impUrl, forward to the appropriate provider
@@ -165,40 +165,40 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
         gravityResult = await forwardImpressionToGravity(impUrl);
       }
 
-      // Now track to ClickHouse WITH the Gravity result
-      try {
-        trackAdEvent({
-          event_type: type,
-          session_id: sessionId,
-          hostname,
-          brand_name: brandName,
-          ad_title: adTitle,
-          ad_text: adText,
-          click_url: clickUrl,
-          imp_url: impUrl,
-          cta,
-          favicon,
-          device_type: deviceType,
-          os,
-          browser,
-          status: "filled", // Client-side events only fire for filled ads
-          // Include Gravity forwarding result for impressions
-          // gravity_forwarded = 1 means Gravity received it (we got paid)
-          gravity_forwarded: gravityResult?.forwarded ? 1 : 0,
-          gravity_status_code: gravityResult?.statusCode ?? 0,
-          error_message: gravityResult?.error ?? "",
-        });
+      // Client-side PostHog JS tracks ad impressions/clicks for analytics.
+      // Server-side tracking here is ONLY for Gravity billing confirmation
+      // (gravity_forwarded = did Gravity actually receive the pixel = did we get paid).
+      // This data is not available client-side.
+      if (gravityResult) {
+        try {
+          trackAdEvent({
+            event_type: type,
+            session_id: sessionId,
+            hostname,
+            brand_name: brandName,
+            click_url: clickUrl,
+            imp_url: impUrl,
+            device_type: deviceType,
+            os,
+            browser,
+            status: "filled",
+            gravity_forwarded: gravityResult.forwarded ? 1 : 0,
+            gravity_status_code: gravityResult.statusCode,
+            error_message: gravityResult.error ?? "",
+            placement: placement || "unknown",
+            ad_index: adIndex ?? -1,
+          });
+        } catch (error) {
+          logger.warn({ error: String(error), type }, "Failed to track Gravity billing event");
+        }
 
         logger.debug({
           type,
           hostname,
           brandName,
-          gravityForwarded: gravityResult?.forwarded,
-          gravityStatus: gravityResult?.statusCode,
-        }, "Event tracked");
-      } catch (error) {
-        // Log but don't fail the request - tracking is best-effort
-        logger.warn({ error: String(error), type }, "Failed to track event");
+          gravityForwarded: gravityResult.forwarded,
+          gravityStatus: gravityResult.statusCode,
+        }, "Gravity impression forwarded");
       }
 
       // Return 204 No Content - client doesn't need a response body
@@ -225,6 +225,8 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
         os: t.Optional(t.String()),
         browser: t.Optional(t.String()),
         adProvider: t.Optional(t.String()),
+        placement: t.Optional(t.String()),
+        adIndex: t.Optional(t.Number()),
       }),
     }
   )

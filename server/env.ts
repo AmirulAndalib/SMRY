@@ -23,11 +23,11 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_URL: z.string().url(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
 
-    // Analytics
-    CLICKHOUSE_URL: z.string().url(),
-    CLICKHOUSE_USER: z.string().min(1),
-    CLICKHOUSE_PASSWORD: z.string().min(1),
-    CLICKHOUSE_DATABASE: z.string().min(1),
+    // Analytics (PostHog) - optional, gracefully degrades when not set
+    POSTHOG_API_KEY: z.string().optional(),
+    POSTHOG_HOST: z.string().url().optional(),
+    POSTHOG_PROJECT_ID: z.string().optional(),
+    POSTHOG_PERSONAL_API_KEY: z.string().optional(),
 
     // Alerting
     ALERT_EMAIL: z.string().email(),
@@ -52,7 +52,7 @@ export const env = createEnv({
 
     // Server config
     CORS_ORIGIN: z.string().min(1),
-    API_PORT: z.coerce.number().default(3001),
+    API_PORT: z.coerce.number().default(Number(process.env.PORT) || 3001),
     MAX_CONCURRENT_ARTICLE_FETCHES: z.coerce.number().default(50),
     ARTICLE_FETCH_SLOT_TIMEOUT_MS: z.coerce.number().default(30000),
     // Inworld AI TTS (optional — TTS disabled when absent)
