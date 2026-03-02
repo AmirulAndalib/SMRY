@@ -15,9 +15,8 @@ export type AnalyticsEvent =
   | "chat_opened"
   | "settings_opened"
   | "ad_loaded"
-  | "ad_impression_client"
-  | "ad_click_client"
-  | "ad_dismiss_client"
+  | "ad_impression"
+  | "ad_click"
   // Chat
   | "chat_message_sent"
   | "chat_suggestion_clicked"

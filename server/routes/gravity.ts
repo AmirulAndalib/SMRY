@@ -2,8 +2,7 @@
  * Ad Routes - POST /api/context, POST /api/px
  *
  * /api/context - Fetches contextual ads. ZeroClick is primary, Gravity is fallback.
- * /api/px - Unified tracking for impressions, clicks, dismissals.
- *           For impressions, wraps Gravity forwarding + PostHog logging atomically.
+ * /api/px - Gravity impression forwarding (billing). Analytics tracked client-side via PostHog JS.
  *
  * Endpoint names are neutral to avoid content blockers (no "ad" or "track" in names).
  */
@@ -165,43 +164,16 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
         gravityResult = await forwardImpressionToGravity(impUrl);
       }
 
-      // Now track to PostHog WITH the Gravity result
-      try {
-        trackAdEvent({
-          event_type: type,
-          session_id: sessionId,
-          hostname,
-          brand_name: brandName,
-          ad_title: adTitle,
-          ad_text: adText,
-          click_url: clickUrl,
-          imp_url: impUrl,
-          cta,
-          favicon,
-          device_type: deviceType,
-          os,
-          browser,
-          status: "filled", // Client-side events only fire for filled ads
-          // Include Gravity forwarding result for impressions
-          // gravity_forwarded = 1 means Gravity received it (we got paid)
-          gravity_forwarded: gravityResult?.forwarded ? 1 : 0,
-          gravity_status_code: gravityResult?.statusCode ?? 0,
-          error_message: gravityResult?.error ?? "",
-          // Placement attribution — which slot + position was interacted with
-          placement: placement || "unknown",
-          ad_index: adIndex ?? -1,
-        });
-
+      // Ad analytics (impressions/clicks/dismissals) are tracked client-side via PostHog JS SDK.
+      // This endpoint only handles Gravity impression forwarding (billing).
+      if (gravityResult) {
         logger.debug({
           type,
           hostname,
           brandName,
-          gravityForwarded: gravityResult?.forwarded,
-          gravityStatus: gravityResult?.statusCode,
-        }, "Event tracked");
-      } catch (error) {
-        // Log but don't fail the request - tracking is best-effort
-        logger.warn({ error: String(error), type }, "Failed to track event");
+          gravityForwarded: gravityResult.forwarded,
+          gravityStatus: gravityResult.statusCode,
+        }, "Gravity impression forwarded");
       }
 
       // Return 204 No Content - client doesn't need a response body

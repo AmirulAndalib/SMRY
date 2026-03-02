@@ -56,6 +56,19 @@ NEXT_PUBLIC_POSTHOG_KEY=phc_...   # Same project, public key
 NEXT_PUBLIC_POSTHOG_HOST=https://us.i.posthog.com
 ```
 
+### Finding Your API Keys
+
+| Key | Where to find it | Format |
+|-----|-----------------|--------|
+| `POSTHOG_API_KEY` | Project Settings → Project API Key | `phc_...` |
+| `POSTHOG_HOST` | Project Settings → under API Key | `https://us.i.posthog.com` or `https://eu.i.posthog.com` |
+| `POSTHOG_PROJECT_ID` | URL bar when in your project: `app.posthog.com/project/{ID}` | Numeric string |
+| `POSTHOG_PERSONAL_API_KEY` | User icon → Personal API Keys → Create key (needs "Query Read" scope) | `phx_...` |
+| `NEXT_PUBLIC_POSTHOG_KEY` | Same as `POSTHOG_API_KEY` | `phc_...` |
+| `NEXT_PUBLIC_POSTHOG_HOST` | Same as `POSTHOG_HOST` | URL |
+
+> See [docs/POSTHOG_SETUP.md](POSTHOG_SETUP.md) for a full step-by-step setup guide.
+
 ---
 
 ## Client-Side SDK Configuration
@@ -126,13 +139,14 @@ Users are grouped by `plan_tier` (`"premium"` or `"free"`), enabling plan-level 
 | `setting_changed` | View mode changed | `setting`, `value` |
 | `ad_loaded` | New ad rotation received | `ad_count`, `brand_names`, `providers` |
 
-### Ad Tracking (client-side PostHog events)
+### Ad Tracking (client-side PostHog)
+
+Ad impressions and clicks are tracked **client-side** via PostHog JS SDK for reliability (retries, batching, localStorage persistence). The `/api/px` endpoint handles only Gravity impression forwarding (billing), not analytics.
 
 | Event | Trigger | Properties |
 |-------|---------|------------|
-| `ad_impression_client` | Ad enters viewport (50%+) | `placement`, `ad_index`, `brand_name`, `ad_provider` |
-| `ad_click_client` | Ad link clicked | `placement`, `ad_index`, `brand_name`, `ad_provider` |
-| `ad_dismiss_client` | Ad dismissed | `placement`, `ad_index`, `brand_name`, `ad_provider` |
+| `ad_impression` | Ad enters viewport (50%+) | `placement`, `ad_provider` |
+| `ad_click` | Ad link clicked | `placement`, `ad_provider` |
 
 **Ad Placements:**
 
@@ -263,29 +277,24 @@ PostHog automatically builds an **LLM Analytics dashboard** from `$ai_generation
 ```
 User sees ad (IntersectionObserver ≥ 50%)
     │
-    ├── Client: track("ad_impression_client", { placement, brand_name, ... })
-    │   → PostHog (client-side, for funnels/attribution)
+    ├── Client: track("ad_impression", { placement, ad_provider })
+    │   → PostHog JS SDK (reliable: retries, batching, localStorage)
     │
     └── Client: fireImpression(ad, "sidebar", 0)
         │
-        ├── sendBeacon → /api/px { type: "impression", placement, adIndex, ... }
-        │   │
-        │   ├── If Gravity: forward to impUrl (server-side)
-        │   │   └── Log gravity_forwarded = 1/0 (revenue assurance)
-        │   │
-        │   └── trackAdEvent → PostHog (server-side, complete data)
+        ├── sendBeacon → /api/px { type: "impression", ... }
+        │   └── If Gravity: forward to impUrl (billing only, no PostHog)
         │
         └── If ZeroClick: fetch → zeroclick.dev/api/v2/impressions
-            (client-side only, per ZeroClick docs)
+            (client-side only, per ZeroClick docs — for their billing)
 
 User clicks ad
     │
-    ├── Client: track("ad_click_client", { placement, brand_name, ... })
-    │   → PostHog (client-side)
+    ├── Client: track("ad_click", { placement, ad_provider })
+    │   → PostHog JS SDK
     │
     ├── Client: fireClick(ad, "sidebar", 0)
-    │   └── sendBeacon → /api/px { type: "click", placement, adIndex }
-    │       └── trackAdEvent → PostHog (server-side)
+    │   └── sendBeacon → /api/px (kept for consistency, no PostHog logging)
     │
     └── Browser navigates to ad.clickUrl
         ├── ZeroClick: zero.click/{id} → advertiser
@@ -434,6 +443,34 @@ trackEvent({
 2. Remove event from `AnalyticsEvent` type
 3. Archive related PostHog insights (don't delete — historical data stays)
 4. Update this doc
+
+---
+
+## Admin Dashboard Query Reference
+
+The admin dashboard (`server/routes/admin.ts`) runs 38 HogQL queries via `queryPostHog()`. Key queries:
+
+### Top 10 Sites (Query #38)
+
+Returns the 10 highest-traffic hostnames with latency and reliability metrics.
+
+| Column | Description |
+|--------|-------------|
+| `hostname` | Article domain |
+| `total_requests` | Request count in the time window |
+| `success_rate` | Percentage of successful requests |
+| `error_count` | Number of failed requests |
+| `avg_duration_ms` | Mean response time |
+| `p95_duration_ms` | 95th percentile response time |
+| `cache_hit_rate` | Percentage of requests served from cache |
+
+### Hostname Stats (Query #1)
+
+Top 200 sites by volume — same as top sites but broader and without p95/cache metrics.
+
+### Health Metrics (Query #6)
+
+Single-row 24h summary: total requests, success rate, cache hit rate, avg/p95 latency, heap usage.
 
 ---
 

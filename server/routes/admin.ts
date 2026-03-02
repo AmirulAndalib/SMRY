@@ -31,6 +31,16 @@ interface HostnameStats {
   avg_duration_ms: number;
 }
 
+interface TopSiteStats {
+  hostname: string;
+  total_requests: number;
+  success_rate: number;
+  error_count: number;
+  avg_duration_ms: number;
+  p95_duration_ms: number;
+  cache_hit_rate: number;
+}
+
 interface SourceEffectiveness {
   hostname: string;
   source: string;
@@ -438,9 +448,10 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
       conditions.push(`properties.hostname != ''`);
 
       if (includeFilters) {
-        const escapeStr = (str: string) => str.replace(/\\/g, "\\\\").replace(/'/g, "''");
+        const escapeStr = (str: string) => str.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+        // Inline all escaping so static analysis (CodeQL) can verify backslash handling
         const escapeForLike = (str: string) =>
-          escapeStr(str).replace(/%/g, "\\%").replace(/_/g, "\\_");
+          str.replace(/\\/g, "\\\\").replace(/'/g, "\\'").replace(/%/g, "\\%").replace(/_/g, "\\_");
         if (hostnameFilter) {
           conditions.push(`properties.hostname = '${escapeStr(hostnameFilter)}'`);
         }
@@ -505,6 +516,7 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
         adCTRByHourDevice,
         adFilledImpressionGap,
         adFunnelTimeSeries,
+        topSites,
       ] = await Promise.all([
         // 1. Which sites consistently error (top 200 by volume)
         queryPostHog<HostnameStats>(`
@@ -1244,6 +1256,25 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
           GROUP BY time_bucket
           ORDER BY time_bucket
         `).catch(() => [] as AdFunnelTimeSeries[]),
+
+        // 38. Top 10 Sites (request count, latency, success rate, cache hit rate)
+        queryPostHog<TopSiteStats>(`
+          SELECT
+            properties.hostname as hostname,
+            count() AS total_requests,
+            round(countIf(properties.outcome = 'success') / count() * 100, 2) AS success_rate,
+            countIf(properties.outcome = 'error') AS error_count,
+            round(avg(toFloat64(properties.duration_ms))) AS avg_duration_ms,
+            round(quantile(0.95)(toFloat64(properties.duration_ms))) AS p95_duration_ms,
+            round(countIf(toFloat64(properties.cache_hit) = 1) / count() * 100, 2) AS cache_hit_rate
+          FROM events
+          WHERE event = 'request_event'
+            AND timestamp > now() - INTERVAL ${hours} HOUR
+            AND properties.hostname != ''
+          GROUP BY hostname
+          ORDER BY total_requests DESC
+          LIMIT 10
+        `).catch(() => [] as TopSiteStats[]),
       ]);
 
       // Get buffer stats for monitoring
@@ -1328,6 +1359,8 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
         adFilledImpressionGap,
         // Real-time funnel with minute granularity
         adFunnelTimeSeries,
+        // Top sites by volume
+        topSites,
       };
     } catch (error) {
       console.error("[analytics] Query error:", error);
