@@ -284,7 +284,9 @@ User sees ad (IntersectionObserver ≥ 50%)
     └── Client: fireImpression(ad, "sidebar", 0)
         │
         ├── sendBeacon → /api/px { type: "impression", ... }
-        │   └── If Gravity: forward to impUrl (billing only, no PostHog)
+        │   └── If Gravity: forward to impUrl (billing)
+        │       └── trackAdEvent → PostHog (server-side, gravity_forwarded = 1/0)
+        │           (billing confirmation — did we get paid?)
         │
         └── If ZeroClick: fetch → zeroclick.dev/api/v2/impressions
             (client-side only, per ZeroClick docs — for their billing)
@@ -295,7 +297,7 @@ User clicks ad
     │   → PostHog JS SDK
     │
     ├── Client: fireClick(ad, "sidebar", 0)
-    │   └── sendBeacon → /api/px (kept for consistency, no PostHog logging)
+    │   └── sendBeacon → /api/px (forwarding only, no server PostHog for clicks)
     │
     └── Browser navigates to ad.clickUrl
         ├── ZeroClick: zero.click/{id} → advertiser

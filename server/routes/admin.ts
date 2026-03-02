@@ -575,7 +575,7 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
             properties.hostname as hostname,
             properties.error_type as error_type,
             any(properties.error_message) AS error_message,
-            '' AS error_severity,
+            any(properties.error_severity) AS error_severity,
             count() AS error_count,
             formatDateTime(max(timestamp), '%Y-%m-%d %H:%i:%S') AS latest_timestamp,
             any(properties.upstream_hostname) AS upstream_hostname,

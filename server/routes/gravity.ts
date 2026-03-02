@@ -2,7 +2,8 @@
  * Ad Routes - POST /api/context, POST /api/px
  *
  * /api/context - Fetches contextual ads. ZeroClick is primary, Gravity is fallback.
- * /api/px - Gravity impression forwarding (billing). Analytics tracked client-side via PostHog JS.
+ * /api/px - Gravity impression forwarding (billing) + server-side billing confirmation tracking.
+ *           Client-side PostHog JS handles impression/click analytics.
  *
  * Endpoint names are neutral to avoid content blockers (no "ad" or "track" in names).
  */
@@ -164,9 +165,33 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
         gravityResult = await forwardImpressionToGravity(impUrl);
       }
 
-      // Ad analytics (impressions/clicks/dismissals) are tracked client-side via PostHog JS SDK.
-      // This endpoint only handles Gravity impression forwarding (billing).
+      // Client-side PostHog JS tracks ad impressions/clicks for analytics.
+      // Server-side tracking here is ONLY for Gravity billing confirmation
+      // (gravity_forwarded = did Gravity actually receive the pixel = did we get paid).
+      // This data is not available client-side.
       if (gravityResult) {
+        try {
+          trackAdEvent({
+            event_type: type,
+            session_id: sessionId,
+            hostname,
+            brand_name: brandName,
+            click_url: clickUrl,
+            imp_url: impUrl,
+            device_type: deviceType,
+            os,
+            browser,
+            status: "filled",
+            gravity_forwarded: gravityResult.forwarded ? 1 : 0,
+            gravity_status_code: gravityResult.statusCode,
+            error_message: gravityResult.error ?? "",
+            placement: placement || "unknown",
+            ad_index: adIndex ?? -1,
+          });
+        } catch (error) {
+          logger.warn({ error: String(error), type }, "Failed to track Gravity billing event");
+        }
+
         logger.debug({
           type,
           hostname,
