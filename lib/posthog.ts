@@ -1,3 +1,4 @@
+import { createHash } from "crypto";
 import { PostHog } from "posthog-node";
 
 /**
@@ -12,6 +13,11 @@ import { PostHog } from "posthog-node";
  *   POSTHOG_PROJECT_ID       – numeric project ID (for HogQL queries)
  *   POSTHOG_PERSONAL_API_KEY – personal API key (for HogQL query API)
  */
+
+/** One-way hash of IP — groups events by user without storing raw PII */
+function hashIP(ip: string): string {
+  return createHash("sha256").update(ip).digest("hex").slice(0, 16);
+}
 
 let client: PostHog | null = null;
 
@@ -123,16 +129,21 @@ export function trackEvent(event: Partial<AnalyticsEvent>): void {
   const posthog = getClient();
   if (!posthog) return;
 
-  // Use client_ip to group requests by user, not request_id which creates a new "person" per request
-  const distinctId = event.client_ip || event.request_id || `req_${crypto.randomUUID().slice(0, 8)}`;
+  // Hash client_ip for distinctId — groups requests by user without storing raw PII
+  const distinctId = event.client_ip
+    ? `user_${hashIP(event.client_ip)}`
+    : event.request_id || `req_${crypto.randomUUID().slice(0, 8)}`;
+
+  // Strip raw client_ip from properties before sending
+  const { client_ip, ...safeProps } = event;
 
   posthog.capture({
     distinctId,
     event: "request_event",
     properties: {
-      ...event,
-      // $ip enables PostHog's automatic geo resolution (country, city, etc.)
-      $ip: event.client_ip,
+      ...safeProps,
+      // $ip is used by PostHog for geo resolution only (country, city) — not stored as a person property
+      $ip: client_ip,
       timestamp: event.timestamp || new Date().toISOString(),
     },
   });

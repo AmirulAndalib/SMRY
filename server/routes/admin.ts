@@ -771,7 +771,7 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
             countIf(properties.status = 'premium_user') AS premium_count,
             countIf(properties.status = 'error' OR properties.status = 'gravity_error') AS error_count,
             countIf(properties.status = 'timeout') AS timeout_count,
-            round(countIf(properties.status = 'filled') / countIf(properties.status != 'premium_user') * 100, 2) AS fill_rate,
+            if(countIf(properties.status != 'premium_user') > 0, round(countIf(properties.status = 'filled') / countIf(properties.status != 'premium_user') * 100, 2), 0) AS fill_rate,
             round(avg(toFloat64(properties.duration_ms))) AS avg_duration_ms,
             uniq(properties.session_id) AS unique_sessions,
             uniqIf(properties.brand_name, properties.brand_name != '') AS unique_brands
@@ -803,7 +803,7 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
             properties.hostname as hostname,
             count() AS total_requests,
             countIf(properties.status = 'filled') AS filled_count,
-            round(countIf(properties.status = 'filled') / countIf(properties.status != 'premium_user') * 100, 2) AS fill_rate,
+            if(countIf(properties.status != 'premium_user') > 0, round(countIf(properties.status = 'filled') / countIf(properties.status != 'premium_user') * 100, 2), 0) AS fill_rate,
             anyIf(properties.brand_name, properties.brand_name != '') AS top_brand
           FROM events
           WHERE event = 'ad_event'
@@ -861,7 +861,7 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
             count() AS total_requests,
             countIf(properties.status = 'filled') AS filled_count,
             countIf(properties.status = 'no_fill') AS no_fill_count,
-            round(countIf(properties.status = 'filled') / countIf(properties.status != 'premium_user') * 100, 2) AS fill_rate
+            if(countIf(properties.status != 'premium_user') > 0, round(countIf(properties.status = 'filled') / countIf(properties.status != 'premium_user') * 100, 2), 0) AS fill_rate
           FROM events
           WHERE event = 'ad_event'
             AND timestamp > now() - INTERVAL ${hours} HOUR
@@ -1250,8 +1250,8 @@ export const adminRoutes = new Elysia({ prefix: "/api" }).get(
             countIf(properties.event_type = 'impression') AS impressions,
             countIf(properties.event_type = 'click') AS clicks,
             countIf(properties.event_type = 'dismiss') AS dismissals,
-            countIf(properties.event_type = 'impression' AND toFloat64(properties.gravity_forwarded) = 1) AS gravity_forwarded,
-            countIf(properties.event_type = 'impression' AND toFloat64(properties.gravity_forwarded) = 0) AS gravity_failed
+            countIf(properties.event_type = 'impression' AND toFloat64(properties.gravity_forwarded) = 1) AS fwd_success,
+            countIf(properties.event_type = 'impression' AND toFloat64(properties.gravity_forwarded) = 0) AS fwd_failed
           FROM events
           WHERE event = 'ad_event'
             AND timestamp > now() - INTERVAL ${minutes} MINUTE
