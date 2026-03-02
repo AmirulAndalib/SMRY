@@ -58,6 +58,10 @@ export const env = createEnv({
     // Inworld AI TTS (optional — TTS disabled when absent)
     INWORLD_API_KEY: z.string().min(1).optional(),
 
+    // Article Classifier service (optional — falls back to >500 chars heuristic)
+    CLASSIFIER_URL: z.string().url().optional(),
+    CLASSIFIER_ENABLED: z.string().optional().transform(v => v === "true"),
+
     LOG_LEVEL: z
       .enum(["trace", "debug", "info", "warn", "error", "fatal"])
       .default("info"),

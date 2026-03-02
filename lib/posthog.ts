@@ -275,6 +275,73 @@ export function trackLLMGeneration(event: LLMGenerationEvent): void {
 }
 
 // ---------------------------------------------------------------------------
+// trackClassificationEvent – per-source classification (extraction_classified)
+// ---------------------------------------------------------------------------
+
+export interface ClassificationEventProps {
+  url: string;
+  hostname: string;
+  source: string;
+  request_id: string;
+  classification: string;
+  classification_confidence: number;
+  classification_method: string;
+  classification_latency_us: number;
+  article_length: number;
+}
+
+export function trackClassificationEvent(props: ClassificationEventProps): void {
+  const posthog = getClient();
+  if (!posthog) return;
+
+  posthog.capture({
+    distinctId: props.request_id || `cls_${crypto.randomUUID().slice(0, 8)}`,
+    event: "extraction_classified",
+    properties: {
+      ...props,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// trackExtractionOutcome – per-request outcome (extraction_outcome)
+// ---------------------------------------------------------------------------
+
+export interface ExtractionOutcomeProps {
+  url: string;
+  hostname: string;
+  request_id: string;
+  winning_source: string;
+  winning_classification: string;
+  winning_confidence: number;
+  selection_reason: string;
+  smry_fast_classification: string | null;
+  smry_fast_length: number;
+  smry_slow_classification: string | null;
+  smry_slow_length: number;
+  wayback_classification: string | null;
+  wayback_length: number;
+  classifier_changed_result: boolean;
+  old_logic_source: string | null;
+  total_fetch_ms: number;
+}
+
+export function trackExtractionOutcome(props: ExtractionOutcomeProps): void {
+  const posthog = getClient();
+  if (!posthog) return;
+
+  posthog.capture({
+    distinctId: props.request_id || `out_${crypto.randomUUID().slice(0, 8)}`,
+    event: "extraction_outcome",
+    properties: {
+      ...props,
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
 // getBufferStats – simplified (PostHog SDK manages its own buffer)
 // ---------------------------------------------------------------------------
 

@@ -1,0 +1,72 @@
+"""
+SMRY Article Classifier — FastAPI microservice.
+
+Classifies HTML extraction outcomes using the Allanatrix/Summary_model XGBoost classifier.
+Endpoints: /classify, /classify/batch, /health
+"""
+
+from contextlib import asynccontextmanager
+
+from fastapi import FastAPI
+from pydantic import BaseModel
+
+from model import classify_html, get_model_info, load_model
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Load model artifacts on startup (XGBOOST.pt bundled in the image)
+    load_model("XGBOOST.pt")
+    yield
+
+
+app = FastAPI(title="SMRY Article Classifier", lifespan=lifespan)
+
+
+class ClassifyRequest(BaseModel):
+    html: str  # Raw HTML string (first 64KB used)
+    source: str = ""  # Optional: which extraction source
+    url: str = ""  # Optional: for logging
+
+
+class ClassifyResponse(BaseModel):
+    outcome: str  # full_article_extracted | partial_article_extracted | etc.
+    confidence: float  # 0-1
+    method: str  # "rule" | "model"
+    latency_us: int  # Microseconds for classification
+
+
+@app.post("/classify", response_model=ClassifyResponse)
+async def classify(req: ClassifyRequest) -> ClassifyResponse:
+    result = classify_html(req.html, url=req.url)
+    return ClassifyResponse(
+        outcome=result.outcome,
+        confidence=result.confidence,
+        method=result.method,
+        latency_us=result.latency_us,
+    )
+
+
+@app.get("/health")
+async def health():
+    return {"status": "ok", "model": get_model_info()}
+
+
+class BatchClassifyRequest(BaseModel):
+    items: list[ClassifyRequest]
+
+
+@app.post("/classify/batch", response_model=list[ClassifyResponse])
+async def classify_batch(req: BatchClassifyRequest) -> list[ClassifyResponse]:
+    results = []
+    for item in req.items:
+        r = classify_html(item.html, url=item.url)
+        results.append(
+            ClassifyResponse(
+                outcome=r.outcome,
+                confidence=r.confidence,
+                method=r.method,
+                latency_us=r.latency_us,
+            )
+        )
+    return results
