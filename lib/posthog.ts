@@ -175,6 +175,8 @@ export function trackAdEvent(event: Partial<AdEvent>): void {
 // queryPostHog – HogQL query API
 // ---------------------------------------------------------------------------
 
+const HOGQL_TIMEOUT_MS = 10_000;
+
 export async function queryPostHog<T>(query: string): Promise<T[]> {
   const host = process.env.POSTHOG_HOST;
   const projectId = process.env.POSTHOG_PROJECT_ID;
@@ -183,6 +185,9 @@ export async function queryPostHog<T>(query: string): Promise<T[]> {
   if (!host || !projectId || !personalApiKey) return [];
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), HOGQL_TIMEOUT_MS);
+
     const response = await fetch(`${host}/api/projects/${projectId}/query/`, {
       method: "POST",
       headers: {
@@ -190,7 +195,10 @@ export async function queryPostHog<T>(query: string): Promise<T[]> {
         Authorization: `Bearer ${personalApiKey}`,
       },
       body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
+      signal: controller.signal,
     });
+
+    clearTimeout(timeout);
 
     if (!response.ok) {
       console.error(`[posthog] HogQL query failed (${response.status}):`, await response.text().catch(() => ""));
