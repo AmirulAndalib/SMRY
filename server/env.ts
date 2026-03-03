@@ -26,11 +26,6 @@ export const env = createEnv({
     // Analytics (PostHog) - optional, gracefully degrades when not set
     POSTHOG_API_KEY: z.string().optional(),
     POSTHOG_HOST: z.string().url().optional(),
-    POSTHOG_PROJECT_ID: z.string().optional(),
-    POSTHOG_PERSONAL_API_KEY: z.string().optional(),
-
-    // Alerting
-    ALERT_EMAIL: z.string().email(),
 
     // Gravity Ads
     GRAVITY_API_KEY: z.string().min(1),
@@ -47,16 +42,17 @@ export const env = createEnv({
     // Clerk Webhooks
     CLERK_WEBHOOK_SECRET: z.string().min(1),
 
-    // Admin auth
-    ADMIN_SECRET: z.string().min(1),
-
     // Server config
     CORS_ORIGIN: z.string().min(1),
     API_PORT: z.coerce.number().default(Number(process.env.PORT) || 3001),
-    MAX_CONCURRENT_ARTICLE_FETCHES: z.coerce.number().default(50),
+    MAX_CONCURRENT_ARTICLE_FETCHES: z.coerce.number().default(75),
     ARTICLE_FETCH_SLOT_TIMEOUT_MS: z.coerce.number().default(30000),
     // Inworld AI TTS (optional — TTS disabled when absent)
     INWORLD_API_KEY: z.string().min(1).optional(),
+
+    // Article Classifier service (optional — falls back to >500 chars heuristic)
+    CLASSIFIER_URL: z.string().url().optional(),
+    CLASSIFIER_ENABLED: z.string().optional().transform(v => v === "true"),
 
     LOG_LEVEL: z
       .enum(["trace", "debug", "info", "warn", "error", "fatal"])

@@ -5,7 +5,7 @@ import unusedImports from "eslint-plugin-unused-imports";
 
 const eslintConfig = [
   {
-    ignores: [".cursor/**/*"],
+    ignores: [".cursor/**/*", "classifier/**/*"],
   },
   ...nextCoreWebVitals,
   // ...tailwindcss.configs["flat/recommended"],

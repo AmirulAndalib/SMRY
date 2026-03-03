@@ -19,6 +19,9 @@ import { getTextDirection } from "../../lib/rtl";
 import { abuseRateLimiter } from "../../lib/rate-limit-memory";
 import { startMemoryTrack, trackFetchResponse, logLargeAllocation } from "../../lib/memory-tracker";
 import { acquireFetchSlot, releaseFetchSlot, FetchSlotTimeoutError } from "../../lib/article-concurrency";
+import { classifyHtml, type ClassificationResult } from "../../lib/classifier-client";
+import { trackClassificationEvent, trackExtractionOutcome } from "../../lib/posthog";
+import { env } from "../env";
 
 const logger = createLogger("api:article");
 
@@ -160,7 +163,7 @@ async function saveOrReturnLongerArticle(key: string, newArticle: CachedArticle,
   }
 }
 
-async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSignal): Promise<{ article: CachedArticle; cacheURL: string } | { error: AppError }> {
+async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout for direct fetch
   // Combine internal timeout with external cancellation signal
@@ -218,6 +221,11 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
       logLargeAllocation("article-html-parse", htmlBytes, { url_host: hostname, source: "smry-fast" });
     }
 
+    // Run Readability parsing and classification in parallel — classification adds 0ms to critical path
+    const classificationPromise = classify && env.CLASSIFIER_ENABLED
+      ? classifyHtml(html, url).catch(() => null)
+      : Promise.resolve(null);
+
     const { document } = parseHTML(html);
     const reader = new Readability(document);
     const parsed = reader.parse();
@@ -225,6 +233,8 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
     if (!parsed || !parsed.content || !parsed.textContent) {
       return { error: createParseError("Failed to extract article content", "smry-fast") };
     }
+
+    const classification = await classificationPromise;
 
     const htmlLang = document.documentElement.getAttribute("lang") || parsed.lang || null;
     const textDir = getTextDirection(htmlLang, parsed.textContent);
@@ -267,7 +277,7 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
     }
 
     memTracker.end({ success: true, article_length: article.length });
-    return { article, cacheURL: url };
+    return { article, cacheURL: url, classification };
   } catch (error) {
     if (error instanceof ResponseTooLargeError) {
       memTracker.end({ success: false, reason: "response_too_large" });
@@ -289,7 +299,7 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
  * instead of going through Diffbot. Archive.org doesn't block server-side requests,
  * so this reliably works for paywalled sites like NYTimes where Diffbot gets 403'd.
  */
-async function fetchArticleWithWaybackDirect(url: string, externalSignal?: AbortSignal): Promise<{ article: CachedArticle; cacheURL: string } | { error: AppError }> {
+async function fetchArticleWithWaybackDirect(url: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const waybackUrl = `https://web.archive.org/web/2/${url}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for Wayback
@@ -335,6 +345,11 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
     // Remove Wayback Machine toolbar/banner injection
     html = html.replace(/<!-- BEGIN WAYBACK TOOLBAR INSERT -->[\s\S]*?<!-- END WAYBACK TOOLBAR INSERT -->/gi, "");
 
+    // Run Readability parsing and classification in parallel
+    const classificationPromise = classify && env.CLASSIFIER_ENABLED
+      ? classifyHtml(html, url).catch(() => null)
+      : Promise.resolve(null);
+
     const { document } = parseHTML(html);
     const reader = new Readability(document);
     const parsed = reader.parse();
@@ -343,6 +358,8 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
       memTracker.end({ success: false, reason: "readability_failed" });
       return { error: createParseError("Failed to extract article content from Wayback", "wayback") };
     }
+
+    const classification = await classificationPromise;
 
     const htmlLang = document.documentElement.getAttribute("lang") || parsed.lang || null;
     const textDir = getTextDirection(htmlLang, parsed.textContent);
@@ -381,7 +398,7 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
     }
 
     memTracker.end({ success: true, article_length: article.length });
-    return { article, cacheURL: waybackUrl };
+    return { article, cacheURL: waybackUrl, classification };
   } catch (error) {
     if (error instanceof ResponseTooLargeError) {
       memTracker.end({ success: false, reason: "response_too_large" });
@@ -398,7 +415,7 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
   }
 }
 
-async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: string, externalSignal?: AbortSignal): Promise<{ article: CachedArticle; cacheURL: string } | { error: AppError }> {
+async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const hostname = (() => { try { return new URL(urlWithSource).hostname; } catch { return "unknown"; } })();
   const memTracker = startMemoryTrack(`article-fetch-${source}`, { url_host: hostname, source });
 
@@ -425,6 +442,11 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
     const va = validation.data;
     const textDir = getTextDirection(va.lang, va.text);
 
+    // Kick off classification before cache/article work — runs in parallel
+    const classificationPromise = classify && env.CLASSIFIER_ENABLED && va.htmlContent
+      ? classifyHtml(va.htmlContent, urlWithSource).catch(() => null)
+      : Promise.resolve(null);
+
     // Cache full htmlContent separately, then keep only a 50KB preview for bypass detection
     // Extract base URL from wayback format for consistent cache keys
     const originalUrl = source === "wayback"
@@ -441,8 +463,10 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
       image: va.image, htmlContent: va.htmlContent?.slice(0, HTML_PREVIEW_LIMIT), lang: va.lang, dir: textDir,
     };
 
+    const classification = await classificationPromise;
+
     memTracker.end({ success: true, article_length: article.length });
-    return { article, cacheURL: urlWithSource };
+    return { article, cacheURL: urlWithSource, classification };
   } catch (error) {
     memTracker.end({ success: false, reason: "exception", error: String(error) });
     return { error: createParseError("Failed to parse article", source) };
@@ -465,6 +489,74 @@ async function fetchArticle(urlWithSource: string, source: string): Promise<{ ar
 const SourceEnum = t.Union([t.Literal("smry-fast"), t.Literal("smry-slow"), t.Literal("wayback")]);
 
 const SOURCES = ["smry-fast", "smry-slow", "wayback"] as const;
+
+// ---------------------------------------------------------------------------
+// Collect-Score-Select: Classifier-First Source Selection
+//
+// All 3 sources run to completion (equal opportunity). Once all settle,
+// the classifier decides which source to use:
+//
+//   1. Group by classifier tier: full > partial > other > error > not_article
+//   2. Within the same tier: pick longest article (more content = better)
+//   3. Classifier down: fall back to length × reliability
+//
+// The classifier IS the decision. No arbitrary weights diluting its signal.
+// ---------------------------------------------------------------------------
+
+// Classifier tiers — strict ordering. Lower number = better extraction.
+const CLASSIFIER_TIER: Record<string, number> = {
+  full_article_extracted: 0,
+  partial_article_extracted: 1,
+  other_failure: 2,
+  api_provider_error: 3,
+  full_page_not_article: 4,
+};
+
+// Source reliability — only used when classifier is unavailable.
+const SOURCE_RELIABILITY: Record<string, number> = {
+  "smry-slow": 1.0,    // Diffbot — paid API, purpose-built for article extraction
+  "wayback": 0.8,      // Archive.org — excellent for paywalled/metered content
+  "smry-fast": 0.6,    // Direct fetch — fast but often returns paywall pages
+};
+
+/**
+ * Compare two extraction results. Returns negative if `a` is better.
+ * Used as a sort comparator — best result ends up first.
+ */
+function compareExtractions(
+  a: { classification?: { outcome: string; confidence: number } | null; articleLength: number; source: string },
+  b: { classification?: { outcome: string; confidence: number } | null; articleLength: number; source: string },
+): number {
+  const aHasCls = a.classification != null;
+  const bHasCls = b.classification != null;
+
+  // Both have classifier results — let the classifier decide
+  if (aHasCls && bHasCls) {
+    const tierA = CLASSIFIER_TIER[a.classification!.outcome] ?? 2;
+    const tierB = CLASSIFIER_TIER[b.classification!.outcome] ?? 2;
+    // Better tier wins
+    if (tierA !== tierB) return tierA - tierB;
+    // Same tier: longer article wins
+    if (a.articleLength !== b.articleLength) return b.articleLength - a.articleLength;
+    // Same tier + same length: higher confidence wins
+    return b.classification!.confidence - a.classification!.confidence;
+  }
+
+  // Only one has classifier — trust it only if the result is reasonable (tier 0-2).
+  // A classified "not_article" (tier 4) or "api_error" (tier 3) shouldn't beat
+  // an unclassified source that may have a long, complete article.
+  if (aHasCls !== bHasCls) {
+    const classified = aHasCls ? a : b;
+    const tier = CLASSIFIER_TIER[classified.classification!.outcome] ?? 2;
+    if (tier <= 2) return aHasCls ? -1 : 1; // good classification wins
+    return aHasCls ? 1 : -1; // bad classification loses to unclassified
+  }
+
+  // Neither has classifier — fall back to length × reliability
+  const scoreA = Math.min(a.articleLength / 10000, 1.0) * 0.70 + (SOURCE_RELIABILITY[a.source] ?? 0.5) * 0.30;
+  const scoreB = Math.min(b.articleLength / 10000, 1.0) * 0.70 + (SOURCE_RELIABILITY[b.source] ?? 0.5) * 0.30;
+  return scoreB - scoreA;
+}
 
 export const articleRoutes = new Elysia({ prefix: "/api" }).get(
   "/article/meta",
@@ -697,163 +789,225 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         throw err;
       }
 
-      // OPTIMIZED: "First success wins" pattern with abort cancellation
-      // Returns immediately when first source succeeds, aborts losers to free memory
+      // ================================================================
+      // Collect-Classify-Select: Classifier-First Source Selection
+      //
+      // 1. COLLECT — Fire all 3 sources in parallel, wait for ALL to finish.
+      //    No early abort. Every source gets equal opportunity.
+      //
+      // 2. CLASSIFY — Each source's HTML is classified in parallel with
+      //    Readability parsing (adds 0ms to critical path). The classifier
+      //    labels each result: full_article | partial | error | not_article.
+      //
+      // 3. SELECT — The classifier IS the decision:
+      //      Primary:   best classifier tier (full > partial > error > not_article)
+      //      Tiebreak:  longest article within same tier
+      //      Last:      highest confidence within same tier + length
+      //    Only the winner is cached. Losers released from memory.
+      //
+      // Classifier down: degrades to length × 0.70 + reliability × 0.30
+      //   (favors diffbot/wayback over smry-fast).
+      //
+      // Latency: bounded by slowest source timeout (~15s worst case).
+      //   Typical: 5-8s. Cache hit: <50ms (skips entirely).
+      // ================================================================
       const fetchStart = Date.now();
 
-      type FetchResult = { source: typeof SOURCES[number]; article: CachedArticle; cacheURL: string };
-
-      // Create abort controllers for each source so losers can be cancelled
-      const abortControllers = {
-        "smry-fast": new AbortController(),
-        "smry-slow": new AbortController(),
-        "wayback": new AbortController(),
+      type FetchResult = {
+        source: typeof SOURCES[number];
+        article: CachedArticle;
+        cacheURL: string;
+        classification?: ClassificationResult | null;
       };
 
-      const fetchPromises: Promise<FetchResult | null>[] = [
-        fetchArticleWithSmryFast(url, abortControllers["smry-fast"].signal).then(r => "article" in r ? { source: "smry-fast" as const, ...r } : null),
-        fetchArticleWithDiffbotWrapper(url, "smry-slow", abortControllers["smry-slow"].signal).then(r => "article" in r ? { source: "smry-slow" as const, ...r } : null),
-        // Use direct Wayback fetch instead of Diffbot — archive.org doesn't block direct requests,
-        // whereas Diffbot's crawlers get 403'd by archive.org for paywalled sites like NYTimes
-        fetchArticleWithWaybackDirect(url, abortControllers["wayback"].signal).then(r => "article" in r ? { source: "wayback" as const, ...r } : null),
-      ];
+      type RankedResult = { result: FetchResult; rank: number };
 
-      // Track cached sources to prevent duplicate writes
-      const cachedSources = new Set<string>();
-
+      // Helper: cache a result in Redis (fire-and-forget)
       const cacheResult = (result: FetchResult) => {
-        if (cachedSources.has(result.source)) return; // Already cached
-        cachedSources.add(result.source);
         const cacheKey = `${result.source}:${url}`;
-        // Direct compress + save — skip decompression comparison during race
-        // to avoid doubling memory. Each source gets its own cache key anyway.
         const metaKey = `meta:${cacheKey}`;
-        const metadata = { title: result.article.title, siteName: result.article.siteName, length: result.article.length, byline: result.article.byline, publishedTime: result.article.publishedTime, image: result.article.image };
-        // htmlContent is already truncated to 50KB preview by the fetch functions
-        // Full htmlContent was cached separately via cacheHtmlContentSeparately in the fetchers
+        const metadata = {
+          title: result.article.title, siteName: result.article.siteName,
+          length: result.article.length, byline: result.article.byline,
+          publishedTime: result.article.publishedTime, image: result.article.image,
+        };
         compressAsync({ ...result.article, htmlContent: undefined })
           .then(compressed => Promise.all([redis.set(cacheKey, compressed), redis.set(metaKey, metadata)]))
           .catch(() => {});
       };
 
-      // Helper: race for first quality result, abort losers immediately on winner
-      const raceForFirstSuccess = async (): Promise<FetchResult | null> => {
-        return new Promise((resolve) => {
-          let resolved = false;
-          let completedCount = 0;
-          const results: (FetchResult | null)[] = [];
-          let winningSource: string | null = null;
+      // Fire all 3 sources in parallel — no abort signal, equal opportunity
+      // classify=true only here (/article/auto) — single-source /article doesn't need it
+      const sourcePromises: Promise<FetchResult | null>[] = [
+        fetchArticleWithSmryFast(url, undefined, true).then(r =>
+          "article" in r ? { source: "smry-fast" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
+        ).catch(() => null),
+        fetchArticleWithWaybackDirect(url, undefined, true).then(r =>
+          "article" in r ? { source: "wayback" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
+        ).catch(() => null),
+        fetchArticleWithDiffbotWrapper(url, "smry-slow", undefined, true).then(r =>
+          "article" in r ? { source: "smry-slow" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
+        ).catch(() => null),
+      ];
 
-          const abortLosers = (winnerSource: string) => {
-            // Give losers a grace period to complete and cache their results.
-            // This way /article/enhanced can serve bypass content (e.g. Diffbot/Wayback
-            // results for paywalled articles where smry-fast wins with truncated content).
-            const GRACE_MS = 8000;
-            setTimeout(() => {
-              const abortedSources: string[] = [];
-              for (const [source, controller] of Object.entries(abortControllers)) {
-                if (source !== winnerSource && !controller.signal.aborted) {
-                  controller.abort();
-                  abortedSources.push(source);
-                }
-              }
-              if (abortedSources.length > 0) {
-                logger.info({ winning_source: winnerSource, aborted_sources: abortedSources }, "Grace period expired, aborting remaining losers");
-              }
-            }, GRACE_MS);
-            logger.info({ winning_source: winnerSource, grace_ms: GRACE_MS }, "Winner found, losers get grace period");
-          };
-
-          fetchPromises.forEach((promise, index) => {
-            promise.then((result) => {
-              completedCount++;
-
-              // If race already resolved, cache this late result then release reference
-              // (this happens when losers complete during the 8s grace period)
-              if (resolved && result) {
-                logger.info({
-                  late_source: result.source,
-                  winning_source: winningSource,
-                  late_article_length: result.article.length,
-                  late_delay_ms: Date.now() - fetchStart,
-                }, "Race loser completed during grace period — caching result for /article/enhanced");
-                cacheResult(result);
-                return;
-              }
-
-              results[index] = result;
-
-              // If we have a quality result and haven't resolved yet, resolve immediately
-              if (!resolved && result && result.article.length > 500) {
-                resolved = true;
-                winningSource = result.source;
-                ctx.set("fetch_ms", Date.now() - fetchStart);
-                ctx.set("winning_source", result.source);
-
-                // Cache winner immediately
-                cacheResult(result);
-
-                // Give losers a grace period to complete and cache their results
-                abortLosers(result.source);
-
-                resolve(result);
-
-                // Null out results array references to allow GC of large article objects
-                for (let i = 0; i < results.length; i++) {
-                  if (i !== index) results[i] = null;
-                }
-              }
-
-              // If all completed and we still haven't resolved, use best available or null
-              if (!resolved && completedCount === fetchPromises.length) {
-                resolved = true;
-                ctx.set("fetch_ms", Date.now() - fetchStart);
-
-                // Cache all successful results
-                results.forEach((r) => {
-                  if (r && r.source !== winningSource) cacheResult(r);
-                });
-
-                // Return best available
-                resolve(results.find(r => r !== null) ?? null);
-              }
-            }).catch(() => {
-              completedCount++;
-              results[index] = null;
-
-              // Check if all failed
-              if (!resolved && completedCount === fetchPromises.length) {
-                resolved = true;
-                ctx.set("fetch_ms", Date.now() - fetchStart);
-                resolve(null);
-              }
-            });
-          });
-        });
-      };
+      let selectionReason = "no_results";
 
       try {
-        const bestResult = await raceForFirstSuccess();
+        // --- COLLECT: wait for all sources to finish ---
+        const settled = await Promise.allSettled(sourcePromises);
+        const results: FetchResult[] = settled
+          .filter((s): s is PromiseFulfilledResult<FetchResult | null> => s.status === "fulfilled")
+          .map(s => s.value)
+          .filter((r): r is FetchResult => r !== null);
 
-        // Return best result
-        if (bestResult) {
-          ctx.merge({ cache_hit: false, result_source: bestResult.source, article_length: bestResult.article.length, status_code: 200 });
-          ctx.success();
-          return {
-            source: bestResult.source,
-            cacheURL: bestResult.cacheURL,
-            article: buildArticleResponse(bestResult.article),
-            status: "success",
-            // Flag to indicate other sources may have longer content
-            // Client should poll /article/enhanced after a few seconds
-            mayHaveEnhanced: bestResult.source === "smry-fast",
+        const totalFetchMs = Date.now() - fetchStart;
+        ctx.set("fetch_ms", totalFetchMs);
+
+        // Emit per-source classification events (all sources, for analytics)
+        for (const result of results) {
+          if (result.classification) {
+            logger.info({
+              source: result.source, hostname,
+              classification: result.classification.outcome,
+              confidence: result.classification.confidence,
+              method: result.classification.method,
+              latency_us: result.classification.latency_us,
+              article_length: result.article.length,
+            }, `Classifier: ${result.source} → ${result.classification.outcome}`);
+            trackClassificationEvent({
+              url, hostname,
+              source: result.source,
+              request_id: ctx.requestId,
+              classification: result.classification.outcome,
+              classification_confidence: result.classification.confidence,
+              classification_method: result.classification.method,
+              classification_latency_us: result.classification.latency_us,
+              article_length: result.article.length,
+            });
+          }
+        }
+
+        if (results.length === 0) {
+          ctx.error("All sources failed", { error_type: "ALL_SOURCES_FAILED", status_code: 500 });
+          set.status = 500;
+          return { error: "Failed to fetch from all sources", type: "ALL_SOURCES_FAILED" };
+        }
+
+        // --- RANK: let the classifier decide, not arbitrary weights ---
+        // Sort using classifier tier as primary key, article length as tiebreaker.
+        // The classifier IS the decision maker.
+        const ranked: RankedResult[] = results.map((r, i) => ({ result: r, rank: i }));
+        ranked.sort((a, b) => compareExtractions(
+          { classification: a.result.classification, articleLength: a.result.article.length, source: a.result.source },
+          { classification: b.result.classification, articleLength: b.result.article.length, source: b.result.source },
+        ));
+        // Assign final rank (1 = best)
+        ranked.forEach((r, i) => { r.rank = i + 1; });
+
+        const bestResult = ranked[0].result;
+
+        // Determine selection reason
+        const hasClassifierData = results.some(r => r.classification != null);
+        if (results.length === 1) {
+          selectionReason = "single_source";
+        } else if (hasClassifierData) {
+          selectionReason = "classifier_decided";
+        } else {
+          selectionReason = "fallback_length_reliability";
+        }
+        ctx.set("selection_reason", selectionReason);
+
+        // --- SELECT: cache only the winner ---
+        cacheResult(bestResult);
+
+        // Build lightweight per-source metadata for PostHog (before releasing loser articles)
+        const sourceMeta: Record<string, {
+          classification: string | null;
+          classifier_tier: number | null;
+          length: number;
+          confidence: number;
+          rank: number;
+        }> = {};
+        for (const { result: r, rank } of ranked) {
+          sourceMeta[r.source] = {
+            classification: r.classification?.outcome || null,
+            classifier_tier: r.classification ? (CLASSIFIER_TIER[r.classification.outcome] ?? 2) : null,
+            length: r.article.length,
+            confidence: r.classification?.confidence || 0,
+            rank,
           };
         }
 
-        // All failed
-        ctx.error("All sources failed", { error_type: "ALL_SOURCES_FAILED", status_code: 500 });
-        set.status = 500;
-        return { error: "Failed to fetch from all sources", type: "ALL_SOURCES_FAILED" };
+        // Release loser article data from memory.
+        // We must wipe the heavy string fields (content, textContent, htmlContent)
+        // because multiple arrays (results, ranked, settled) hold references to the
+        // same FetchResult objects — nulling one reference isn't enough.
+        for (let i = 1; i < ranked.length; i++) {
+          const loser = ranked[i].result;
+          if (loser) {
+            // Wipe heavy string fields (~500KB-1MB per article) so GC can reclaim them
+            // even while results/settled arrays still reference the object shell
+            (loser.article as Record<string, unknown>).content = "";
+            (loser.article as Record<string, unknown>).textContent = "";
+            (loser.article as Record<string, unknown>).htmlContent = undefined;
+            loser.classification = null;
+          }
+          (ranked[i] as { result: FetchResult | null }).result = null;
+        }
+        // Also clear all source arrays so no stale references remain.
+        // settled/sourcePromises both hold refs to the same FetchResult objects.
+        results.length = 0;
+        settled.length = 0;
+        sourcePromises.length = 0;
+
+        // Emit extraction_outcome tracking event (only when at least one source got classified)
+        const hasClassification = Object.values(sourceMeta).some(m => m.classification != null);
+        if (env.CLASSIFIER_ENABLED && hasClassification) {
+          logger.info({
+            hostname,
+            winning_source: bestResult.source,
+            winning_classification: bestResult.classification?.outcome || "unknown",
+            winning_confidence: bestResult.classification?.confidence || 0,
+            winning_tier: bestResult.classification ? (CLASSIFIER_TIER[bestResult.classification.outcome] ?? 2) : null,
+            selection_reason: selectionReason,
+            sources: sourceMeta,
+            total_fetch_ms: totalFetchMs,
+          }, `Extraction outcome: ${bestResult.source} won (tier=${bestResult.classification?.outcome || "no_classifier"}, len=${bestResult.article.length})`);
+
+          trackExtractionOutcome({
+            url,
+            hostname,
+            request_id: ctx.requestId,
+            winning_source: bestResult.source,
+            winning_classification: bestResult.classification?.outcome || "unknown",
+            winning_confidence: bestResult.classification?.confidence || 0,
+            selection_reason: selectionReason,
+            smry_fast_classification: sourceMeta["smry-fast"]?.classification || null,
+            smry_fast_length: sourceMeta["smry-fast"]?.length || 0,
+            smry_slow_classification: sourceMeta["smry-slow"]?.classification || null,
+            smry_slow_length: sourceMeta["smry-slow"]?.length || 0,
+            wayback_classification: sourceMeta["wayback"]?.classification || null,
+            wayback_length: sourceMeta["wayback"]?.length || 0,
+            total_fetch_ms: totalFetchMs,
+          });
+        }
+
+        // Return the best result
+        ctx.merge({
+          cache_hit: false,
+          result_source: bestResult.source,
+          article_length: bestResult.article.length,
+          status_code: 200,
+          winning_source: bestResult.source,
+        });
+        ctx.success();
+        return {
+          source: bestResult.source,
+          cacheURL: bestResult.cacheURL,
+          article: buildArticleResponse(bestResult.article),
+          status: "success",
+          mayHaveEnhanced: false, // All sources already evaluated by classifier
+        };
       } finally {
         releaseFetchSlot();
       }

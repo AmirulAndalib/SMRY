@@ -10,8 +10,6 @@ import { PostHog } from "posthog-node";
  * Env vars:
  *   POSTHOG_API_KEY          – project API key (server-side)
  *   POSTHOG_HOST             – PostHog instance URL
- *   POSTHOG_PROJECT_ID       – numeric project ID (for HogQL queries)
- *   POSTHOG_PERSONAL_API_KEY – personal API key (for HogQL query API)
  */
 
 /** One-way hash of IP — groups events by user without storing raw PII */
@@ -172,58 +170,6 @@ export function trackAdEvent(event: Partial<AdEvent>): void {
 }
 
 // ---------------------------------------------------------------------------
-// queryPostHog – HogQL query API
-// ---------------------------------------------------------------------------
-
-const HOGQL_TIMEOUT_MS = 10_000;
-
-export async function queryPostHog<T>(query: string): Promise<T[]> {
-  const host = process.env.POSTHOG_HOST;
-  const projectId = process.env.POSTHOG_PROJECT_ID;
-  const personalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
-
-  if (!host || !projectId || !personalApiKey) return [];
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), HOGQL_TIMEOUT_MS);
-
-    const response = await fetch(`${host}/api/projects/${projectId}/query/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${personalApiKey}`,
-      },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      console.error(`[posthog] HogQL query failed (${response.status}):`, await response.text().catch(() => ""));
-      return [];
-    }
-
-    const data = await response.json();
-    // HogQL returns { columns: string[], results: any[][] }
-    const columns: string[] = data.columns ?? [];
-    const rows: unknown[][] = data.results ?? [];
-
-    return rows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      columns.forEach((col, i) => {
-        obj[col] = row[i];
-      });
-      return obj as T;
-    });
-  } catch (error) {
-    console.error("[posthog] HogQL query error:", error instanceof Error ? error.message : String(error));
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
 // trackLLMGeneration – PostHog LLM analytics ($ai_generation events)
 // See: https://posthog.com/docs/llm-analytics/start-here
 // ---------------------------------------------------------------------------
@@ -270,6 +216,86 @@ export function trackLLMGeneration(event: LLMGenerationEvent): void {
       is_premium: event.isPremium,
       language: event.language,
       message_count: event.messageCount,
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// URL sanitization — strip query params and fragments to avoid leaking tokens
+// ---------------------------------------------------------------------------
+
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// trackClassificationEvent – per-source classification (extraction_classified)
+// ---------------------------------------------------------------------------
+
+export interface ClassificationEventProps {
+  url: string;
+  hostname: string;
+  source: string;
+  request_id: string;
+  classification: string;
+  classification_confidence: number;
+  classification_method: string;
+  classification_latency_us: number;
+  article_length: number;
+}
+
+export function trackClassificationEvent(props: ClassificationEventProps): void {
+  const posthog = getClient();
+  if (!posthog) return;
+
+  posthog.capture({
+    distinctId: props.request_id || `cls_${crypto.randomUUID().slice(0, 8)}`,
+    event: "extraction_classified",
+    properties: {
+      ...props,
+      url: sanitizeUrl(props.url),
+      timestamp: new Date().toISOString(),
+    },
+  });
+}
+
+// ---------------------------------------------------------------------------
+// trackExtractionOutcome – per-request outcome (extraction_outcome)
+// ---------------------------------------------------------------------------
+
+export interface ExtractionOutcomeProps {
+  url: string;
+  hostname: string;
+  request_id: string;
+  winning_source: string;
+  winning_classification: string;
+  winning_confidence: number;
+  selection_reason: string;
+  smry_fast_classification: string | null;
+  smry_fast_length: number;
+  smry_slow_classification: string | null;
+  smry_slow_length: number;
+  wayback_classification: string | null;
+  wayback_length: number;
+  total_fetch_ms: number;
+}
+
+export function trackExtractionOutcome(props: ExtractionOutcomeProps): void {
+  const posthog = getClient();
+  if (!posthog) return;
+
+  posthog.capture({
+    distinctId: props.request_id || `out_${crypto.randomUUID().slice(0, 8)}`,
+    event: "extraction_outcome",
+    properties: {
+      ...props,
+      url: sanitizeUrl(props.url),
+      timestamp: new Date().toISOString(),
     },
   });
 }

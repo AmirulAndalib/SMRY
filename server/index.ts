@@ -5,9 +5,9 @@
 import { Elysia } from "elysia";
 import { node } from "@elysiajs/node";
 import { cors } from "@elysiajs/cors";
-import { cron } from "@elysiajs/cron";
+
 import { articleRoutes } from "./routes/article";
-import { adminRoutes } from "./routes/admin";
+
 import { chatRoutes } from "./routes/chat";
 import { chatThreadsRoutes } from "./routes/chat-threads";
 import { webhookRoutes } from "./routes/webhooks";
@@ -18,7 +18,7 @@ import { premiumRoutes } from "./routes/premium";
 import { ttsRoutes } from "./routes/tts";
 import { startMemoryMonitor, getCurrentMemory } from "../lib/memory-monitor";
 import { startCacheStatsLogger, getAllCacheStats } from "../lib/memory-tracker";
-import { checkErrorRateAndAlert } from "../lib/alerting";
+
 import { configureFetchLimiter } from "../lib/article-concurrency";
 import { configureTTSLimiter, getTTSSlotStats } from "../lib/tts-concurrency";
 import { env } from "./env";
@@ -45,13 +45,6 @@ const app = new Elysia({ adapter: node() })
     set.headers["X-Content-Type-Options"] = "nosniff";
     set.headers["Referrer-Policy"] = "strict-origin-when-cross-origin";
   })
-  .use(
-    cron({
-      name: "error-rate-alerting",
-      pattern: "*/5 * * * *", // Every 5 minutes
-      run: checkErrorRateAndAlert,
-    })
-  )
   .get("/", () => ({
     service: "smry-api",
     status: "running",
@@ -90,7 +83,6 @@ const app = new Elysia({ adapter: node() })
     };
   })
   .use(articleRoutes)
-  .use(adminRoutes)
   .use(chatRoutes)
   .use(chatThreadsRoutes)
   .use(webhookRoutes)

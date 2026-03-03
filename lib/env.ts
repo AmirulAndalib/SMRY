@@ -17,12 +17,6 @@ export const env = createEnv({
     // Analytics (PostHog) - optional, gracefully degrades when not set
     POSTHOG_API_KEY: z.string().optional(),
     POSTHOG_HOST: z.string().url().optional(),
-    POSTHOG_PROJECT_ID: z.string().optional(),
-    POSTHOG_PERSONAL_API_KEY: z.string().optional(),
-
-    // Alerting
-    RESEND_API_KEY: z.string().min(1),
-    ALERT_EMAIL: z.string().email(),
 
     // Server config
     CORS_ORIGIN: z.string().min(1),
@@ -47,10 +41,6 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_TOKEN: process.env.UPSTASH_REDIS_REST_TOKEN,
     POSTHOG_API_KEY: process.env.POSTHOG_API_KEY,
     POSTHOG_HOST: process.env.POSTHOG_HOST,
-    POSTHOG_PROJECT_ID: process.env.POSTHOG_PROJECT_ID,
-    POSTHOG_PERSONAL_API_KEY: process.env.POSTHOG_PERSONAL_API_KEY,
-    RESEND_API_KEY: process.env.RESEND_API_KEY,
-    ALERT_EMAIL: process.env.ALERT_EMAIL,
     CORS_ORIGIN: process.env.CORS_ORIGIN,
     API_PORT: process.env.API_PORT,
     LOG_LEVEL: process.env.LOG_LEVEL,

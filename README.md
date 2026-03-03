@@ -233,10 +233,6 @@ POSTHOG_PERSONAL_API_KEY=
 NEXT_PUBLIC_POSTHOG_KEY=
 NEXT_PUBLIC_POSTHOG_HOST=
 
-# Alerting - https://resend.com
-RESEND_API_KEY=
-ALERT_EMAIL=
-
 # Server config
 CORS_ORIGIN=http://localhost:3000
 NEXT_PUBLIC_URL=http://localhost:3000
