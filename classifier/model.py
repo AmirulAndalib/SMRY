@@ -53,10 +53,18 @@ _AUTH_PATTERNS = re.compile(
     re.IGNORECASE,
 )
 
-# HTML tag stripper for text_to_html_ratio
-# Use *> (zero-or-more) instead of +> to avoid polynomial backtracking (ReDoS)
-# on unterminated '<' sequences in malicious input.
-_TAG_RE = re.compile(r"<[^>]*>")
+def _strip_tags(html: str) -> str:
+    """Strip HTML tags in O(n) without regex (ReDoS-safe)."""
+    out: list[str] = []
+    in_tag = False
+    for ch in html:
+        if ch == "<":
+            in_tag = True
+        elif ch == ">":
+            in_tag = False
+        elif not in_tag:
+            out.append(ch)
+    return "".join(out)
 
 # ---------------------------------------------------------------------------
 # Model artifacts (loaded once on startup)
@@ -122,7 +130,7 @@ def extract_features(html: str, url: str = "", max_chars: int = 64000) -> dict:
     prefix_len = len(prefix)
 
     # Text extraction for text_to_html_ratio
-    text_only = _TAG_RE.sub("", prefix).strip()
+    text_only = _strip_tags(prefix).strip()
     text_len = len(text_only)
 
     features = {
@@ -250,15 +258,15 @@ def classify_html(html: str, url: str = "") -> ClassifyResponse:
     X_scaled = _scaler.transform(X)
     dmatrix = xgboost.DMatrix(X_scaled)
 
-    prediction = int(_model.predict(dmatrix)[0])
-    raw_label = _id_to_label.get(prediction, "content_unavailable")
-    label = LABEL_MAP.get(raw_label, "other_failure")
-
-    # Confidence via softmax on raw margins
+    # Single inference call — derive both prediction and confidence from margins
     margins = _model.predict(dmatrix, output_margin=True)
     logits = margins[0] if margins.ndim == 2 else margins
     exp_logits = np.exp(logits - logits.max())
     probs = exp_logits / exp_logits.sum()
+
+    prediction = int(np.argmax(probs))
+    raw_label = _id_to_label.get(prediction, "content_unavailable")
+    label = LABEL_MAP.get(raw_label, "other_failure")
     confidence = float(probs.max())
 
     # Post-model corrections — only override when features strongly contradict

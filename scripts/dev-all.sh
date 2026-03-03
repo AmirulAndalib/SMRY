@@ -18,6 +18,7 @@ cleanup() {
   echo "Stopping services..."
   # Kill background processes
   kill $APP_PID 2>/dev/null || true
+  kill $NEXT_PID 2>/dev/null || true
   # Stop classifier container
   docker stop "$CLASSIFIER_CONTAINER" 2>/dev/null || true
   echo "All services stopped."

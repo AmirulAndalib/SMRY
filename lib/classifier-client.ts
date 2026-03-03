@@ -8,7 +8,9 @@
  * Falls back gracefully when the classifier service is unavailable.
  */
 
-const CLASSIFIER_URL = process.env.CLASSIFIER_URL || "http://localhost:8000";
+import { env } from "../server/env";
+
+const CLASSIFIER_URL = env.CLASSIFIER_URL || "http://localhost:8000";
 const CLASSIFIER_TIMEOUT_MS = 3000;
 
 export interface ClassificationResult {
@@ -19,7 +21,7 @@ export interface ClassificationResult {
     | "other_failure"
     | "full_page_not_article";
   confidence: number;
-  method: "rule" | "model";
+  method: "model" | "fallback";
   latency_us: number;
 }
 
