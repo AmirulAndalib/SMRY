@@ -442,10 +442,10 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
     const va = validation.data;
     const textDir = getTextDirection(va.lang, va.text);
 
-    // Classify the HTML content from Diffbot (in parallel with cache ops)
-    const classification = classify && env.CLASSIFIER_ENABLED && va.htmlContent
-      ? await classifyHtml(va.htmlContent, urlWithSource).catch(() => null)
-      : null;
+    // Kick off classification before cache/article work — runs in parallel
+    const classificationPromise = classify && env.CLASSIFIER_ENABLED && va.htmlContent
+      ? classifyHtml(va.htmlContent, urlWithSource).catch(() => null)
+      : Promise.resolve(null);
 
     // Cache full htmlContent separately, then keep only a 50KB preview for bypass detection
     // Extract base URL from wayback format for consistent cache keys
@@ -462,6 +462,8 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
       siteName: va.siteName, byline: va.byline, publishedTime: va.publishedTime,
       image: va.image, htmlContent: va.htmlContent?.slice(0, HTML_PREVIEW_LIMIT), lang: va.lang, dir: textDir,
     };
+
+    const classification = await classificationPromise;
 
     memTracker.end({ success: true, article_length: article.length });
     return { article, cacheURL: urlWithSource, classification };

@@ -9,7 +9,6 @@ import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
-from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from model import classify_html, get_model_info, load_model
@@ -59,10 +58,10 @@ async def classify(req: ClassifyRequest) -> ClassifyResponse:
 async def health():
     info = get_model_info()
     if not info["loaded"]:
-        return JSONResponse(
-            status_code=503,
-            content={"status": "degraded", "model": info},
-        )
+        # Return 200 so Docker HEALTHCHECK doesn't restart the container.
+        # Degraded mode still serves heuristic fallbacks — restarting won't help
+        # if the model file is missing/corrupt.
+        return {"status": "degraded", "model": info}
     return {"status": "ok", "model": info}
 
 
