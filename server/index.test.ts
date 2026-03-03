@@ -8,13 +8,11 @@
 import { describe, expect, it, beforeAll } from "bun:test";
 import { Elysia } from "elysia";
 import { articleRoutes } from "./routes/article";
-import { adminRoutes } from "./routes/admin";
 
 // Create test app with all routes
 const createTestApp = () => {
   return new Elysia()
     .use(articleRoutes)
-    .use(adminRoutes)
     .get("/health", () => ({
       status: "ok",
       timestamp: new Date().toISOString(),
@@ -97,102 +95,6 @@ describe("Elysia API Server", () => {
     });
   });
 
-  describe("Admin Route - GET /api/admin", () => {
-    it("should return analytics data with default time range", async () => {
-      const response = await app.handle(
-        new Request("http://localhost/api/admin")
-      );
-
-      // May return 200, 401 (no token), or 500 depending on PostHog availability
-      expect([200, 401, 500]).toContain(response.status);
-
-      if (response.status === 200) {
-        const body = await response.json();
-        expect(body.timeRange).toBe("24h");
-        expect(body.generatedAt).toBeDefined();
-        expect(body.bufferStats).toBeDefined();
-        expect(body.filters).toBeDefined();
-        expect(body.health).toBeDefined();
-      }
-    });
-
-    it("should accept 1h time range", async () => {
-      const response = await app.handle(
-        new Request("http://localhost/api/admin?range=1h")
-      );
-      expect([200, 401, 500]).toContain(response.status);
-
-      if (response.status === 200) {
-        const body = await response.json();
-        expect(body.timeRange).toBe("1h");
-      }
-    });
-
-    it("should accept 7d time range", async () => {
-      const response = await app.handle(
-        new Request("http://localhost/api/admin?range=7d")
-      );
-      expect([200, 401, 500]).toContain(response.status);
-
-      if (response.status === 200) {
-        const body = await response.json();
-        expect(body.timeRange).toBe("7d");
-      }
-    });
-
-    it("should accept filter parameters", async () => {
-      const response = await app.handle(
-        new Request("http://localhost/api/admin?hostname=example.com&source=smry-fast&outcome=success")
-      );
-      expect([200, 401, 500]).toContain(response.status);
-
-      if (response.status === 200) {
-        const body = await response.json();
-        expect(body.filters.hostname).toBe("example.com");
-        expect(body.filters.source).toBe("smry-fast");
-        expect(body.filters.outcome).toBe("success");
-        expect(body.filters.hasFilters).toBe(true);
-      }
-    });
-
-    it("should accept URL search parameter", async () => {
-      const response = await app.handle(
-        new Request("http://localhost/api/admin?urlSearch=test")
-      );
-      expect([200, 401, 500]).toContain(response.status);
-
-      if (response.status === 200) {
-        const body = await response.json();
-        expect(body.filters.urlSearch).toBe("test");
-        expect(body.filters.hasFilters).toBe(true);
-      }
-    });
-
-    it("should return all analytics sections", async () => {
-      const response = await app.handle(
-        new Request("http://localhost/api/admin")
-      );
-
-      if (response.status === 200) {
-        const body = await response.json();
-
-        // Verify all expected sections exist
-        expect(body.hostnameStats).toBeDefined();
-        expect(body.sourceEffectiveness).toBeDefined();
-        expect(body.hourlyTraffic).toBeDefined();
-        expect(body.errorBreakdown).toBeDefined();
-        expect(body.upstreamBreakdown).toBeDefined();
-        expect(body.realtimePopular).toBeDefined();
-        expect(body.requestEvents).toBeDefined();
-        expect(body.liveRequests).toBeDefined();
-        expect(body.endpointStats).toBeDefined();
-        expect(body.hourlyEndpointTraffic).toBeDefined();
-        expect(body.universallyBroken).toBeDefined();
-        expect(body.sourceErrorRateTimeSeries).toBeDefined();
-      }
-    });
-  });
-
   describe("Route Registration", () => {
     it("should register all expected routes", () => {
       // Get registered routes from the app
@@ -203,12 +105,6 @@ describe("Elysia API Server", () => {
         (r) => r.path === "/api/article" && r.method === "GET"
       );
       expect(articleRoute).toBeDefined();
-
-      // Check admin route
-      const adminRoute = routes.find(
-        (r) => r.path === "/api/admin" && r.method === "GET"
-      );
-      expect(adminRoute).toBeDefined();
 
       // Check health route
       const healthRoute = routes.find(
@@ -338,4 +234,3 @@ describe("HTML Content for Original View", () => {
     expect(body.article.htmlContentPreview.length).toBeGreaterThan(0);
   });
 });
-

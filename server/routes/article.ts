@@ -488,6 +488,67 @@ const SourceEnum = t.Union([t.Literal("smry-fast"), t.Literal("smry-slow"), t.Li
 
 const SOURCES = ["smry-fast", "smry-slow", "wayback"] as const;
 
+// ---------------------------------------------------------------------------
+// Collect-Score-Select: Classifier-First Source Selection
+//
+// All 3 sources run to completion (equal opportunity). Once all settle,
+// the classifier decides which source to use:
+//
+//   1. Group by classifier tier: full > partial > other > error > not_article
+//   2. Within the same tier: pick longest article (more content = better)
+//   3. Classifier down: fall back to length × reliability
+//
+// The classifier IS the decision. No arbitrary weights diluting its signal.
+// ---------------------------------------------------------------------------
+
+// Classifier tiers — strict ordering. Lower number = better extraction.
+const CLASSIFIER_TIER: Record<string, number> = {
+  full_article_extracted: 0,
+  partial_article_extracted: 1,
+  other_failure: 2,
+  api_provider_error: 3,
+  full_page_not_article: 4,
+};
+
+// Source reliability — only used when classifier is unavailable.
+const SOURCE_RELIABILITY: Record<string, number> = {
+  "smry-slow": 1.0,    // Diffbot — paid API, purpose-built for article extraction
+  "wayback": 0.8,      // Archive.org — excellent for paywalled/metered content
+  "smry-fast": 0.6,    // Direct fetch — fast but often returns paywall pages
+};
+
+/**
+ * Compare two extraction results. Returns negative if `a` is better.
+ * Used as a sort comparator — best result ends up first.
+ */
+function compareExtractions(
+  a: { classification?: { outcome: string; confidence: number } | null; articleLength: number; source: string },
+  b: { classification?: { outcome: string; confidence: number } | null; articleLength: number; source: string },
+): number {
+  const aHasCls = a.classification != null;
+  const bHasCls = b.classification != null;
+
+  // Both have classifier results — let the classifier decide
+  if (aHasCls && bHasCls) {
+    const tierA = CLASSIFIER_TIER[a.classification!.outcome] ?? 2;
+    const tierB = CLASSIFIER_TIER[b.classification!.outcome] ?? 2;
+    // Better tier wins
+    if (tierA !== tierB) return tierA - tierB;
+    // Same tier: longer article wins
+    if (a.articleLength !== b.articleLength) return b.articleLength - a.articleLength;
+    // Same tier + same length: higher confidence wins
+    return b.classification!.confidence - a.classification!.confidence;
+  }
+
+  // Only one has classifier — the classified result wins (we trust classifier over guessing)
+  if (aHasCls !== bHasCls) return aHasCls ? -1 : 1;
+
+  // Neither has classifier — fall back to length × reliability
+  const scoreA = Math.min(a.articleLength / 10000, 1.0) * 0.70 + (SOURCE_RELIABILITY[a.source] ?? 0.5) * 0.30;
+  const scoreB = Math.min(b.articleLength / 10000, 1.0) * 0.70 + (SOURCE_RELIABILITY[b.source] ?? 0.5) * 0.30;
+  return scoreB - scoreA;
+}
+
 export const articleRoutes = new Elysia({ prefix: "/api" }).get(
   "/article/meta",
   async ({ query, set }) => {
@@ -720,24 +781,28 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
       }
 
       // ================================================================
-      // Parallel Fetch + Classifier-Gated Selection
+      // Collect-Classify-Select: Classifier-First Source Selection
       //
-      // All 3 sources fire in parallel (same memory as before).
-      // As results arrive, the classifier decides accept vs. wait:
+      // 1. COLLECT — Fire all 3 sources in parallel, wait for ALL to finish.
+      //    No early abort. Every source gets equal opportunity.
       //
-      //   full_article_extracted  → accept immediately, cache others in background
-      //   partial / error / etc.  → store as fallback, keep waiting
-      //   all settled             → pick best by classifier tier, then by length
+      // 2. CLASSIFY — Each source's HTML is classified in parallel with
+      //    Readability parsing (adds 0ms to critical path). The classifier
+      //    labels each result: full_article | partial | error | not_article.
       //
-      // Latency:
-      //   Non-paywalled sites: ~2s (smry-fast accepted as full_article)
-      //   Paywalled sites:     ~5-8s (smry-fast rejected, wayback/diffbot accepted)
-      //   Worst case:          ~15s timeout (all sources slow, pick best available)
+      // 3. SELECT — The classifier IS the decision:
+      //      Primary:   best classifier tier (full > partial > error > not_article)
+      //      Tiebreak:  longest article within same tier
+      //      Last:      highest confidence within same tier + length
+      //    Only the winner is cached. Losers released from memory.
       //
-      // When classifier is disabled: falls back to >500 chars, first-wins (old behavior).
+      // Classifier down: degrades to length × 0.70 + reliability × 0.30
+      //   (favors diffbot/wayback over smry-fast).
+      //
+      // Latency: bounded by slowest source timeout (~15s worst case).
+      //   Typical: 5-8s. Cache hit: <50ms (skips entirely).
       // ================================================================
       const fetchStart = Date.now();
-      const classifierActive = !!env.CLASSIFIER_ENABLED;
 
       type FetchResult = {
         source: typeof SOURCES[number];
@@ -745,6 +810,8 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         cacheURL: string;
         classification?: ClassificationResult | null;
       };
+
+      type RankedResult = { result: FetchResult; rank: number };
 
       // Helper: cache a result in Redis (fire-and-forget)
       const cacheResult = (result: FetchResult) => {
@@ -760,33 +827,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
           .catch(() => {});
       };
 
-      // Helper: emit per-source classification tracking event
-      const emitClassificationEvent = (result: FetchResult) => {
-        if (result.classification) {
-          logger.info({
-            source: result.source,
-            hostname,
-            classification: result.classification.outcome,
-            confidence: result.classification.confidence,
-            method: result.classification.method,
-            latency_us: result.classification.latency_us,
-            article_length: result.article.length,
-          }, `Classifier: ${result.source} → ${result.classification.outcome}`);
-          trackClassificationEvent({
-            url,
-            hostname,
-            source: result.source,
-            request_id: ctx.requestId,
-            classification: result.classification.outcome,
-            classification_confidence: result.classification.confidence,
-            classification_method: result.classification.method,
-            classification_latency_us: result.classification.latency_us,
-            article_length: result.article.length,
-          });
-        }
-      };
-
-      // Fire all 3 sources in parallel
+      // Fire all 3 sources in parallel — no abort signal, equal opportunity
       const sourcePromises: Promise<FetchResult | null>[] = [
         fetchArticleWithSmryFast(url).then(r =>
           "article" in r ? { source: "smry-fast" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
@@ -799,109 +840,134 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         ).catch(() => null),
       ];
 
-      // Collect all results as they arrive, pick winner using classifier
-      const allResults: Record<string, FetchResult> = {};
-      let selectionReason = "fallback_length";
+      let selectionReason = "no_results";
 
       try {
-        const bestResult = await new Promise<FetchResult | null>((resolve) => {
-          let settled = 0;
-          let resolved = false;
+        // --- COLLECT: wait for all sources to finish ---
+        const settled = await Promise.allSettled(sourcePromises);
+        const results: FetchResult[] = settled
+          .filter((s): s is PromiseFulfilledResult<FetchResult | null> => s.status === "fulfilled")
+          .map(s => s.value)
+          .filter((r): r is FetchResult => r !== null);
 
-          sourcePromises.forEach((promise) => {
-            promise.then((result) => {
-              settled++;
+        const totalFetchMs = Date.now() - fetchStart;
+        ctx.set("fetch_ms", totalFetchMs);
 
-              if (result) {
-                allResults[result.source] = result;
-                cacheResult(result);
-                emitClassificationEvent(result);
-
-                // --- Classifier-gated early accept ---
-                if (!resolved && classifierActive) {
-                  const cls = result.classification;
-                  if (cls?.outcome === "full_article_extracted") {
-                    resolved = true;
-                    selectionReason = "classifier_full_article";
-                    logger.info({
-                      source: result.source, hostname,
-                      article_length: result.article.length,
-                      confidence: cls.confidence,
-                      elapsed_ms: Date.now() - fetchStart,
-                    }, "Parallel: classifier accepted full article");
-                    resolve(result);
-                    return;
-                  }
-                }
-
-                // --- Fallback: old >500 chars first-wins (when classifier disabled) ---
-                if (!resolved && !classifierActive && result.article.length > 500) {
-                  resolved = true;
-                  selectionReason = "length_first_wins";
-                  resolve(result);
-                  return;
-                }
-              }
-
-              // All sources settled — pick best from what we have
-              if (settled === sourcePromises.length && !resolved) {
-                resolved = true;
-                const candidates = Object.values(allResults);
-                if (candidates.length === 0) {
-                  resolve(null);
-                  return;
-                }
-
-                if (classifierActive) {
-                  // Prefer by classifier tier: full > partial > anything else
-                  // Within same tier, prefer longer article
-                  const tierOrder: Record<string, number> = {
-                    full_article_extracted: 0,
-                    partial_article_extracted: 1,
-                    other_failure: 2,
-                    api_provider_error: 3,
-                    full_page_not_article: 4,
-                  };
-                  candidates.sort((a, b) => {
-                    const tierA = tierOrder[a.classification?.outcome ?? "other_failure"] ?? 2;
-                    const tierB = tierOrder[b.classification?.outcome ?? "other_failure"] ?? 2;
-                    if (tierA !== tierB) return tierA - tierB;
-                    return b.article.length - a.article.length; // longer is better
-                  });
-                  selectionReason = "classifier_best_available";
-                } else {
-                  // No classifier: pick longest article
-                  candidates.sort((a, b) => b.article.length - a.article.length);
-                  selectionReason = "longest_available";
-                }
-
-                resolve(candidates[0]);
-              }
+        // Emit per-source classification events (all sources, for analytics)
+        for (const result of results) {
+          if (result.classification) {
+            logger.info({
+              source: result.source, hostname,
+              classification: result.classification.outcome,
+              confidence: result.classification.confidence,
+              method: result.classification.method,
+              latency_us: result.classification.latency_us,
+              article_length: result.article.length,
+            }, `Classifier: ${result.source} → ${result.classification.outcome}`);
+            trackClassificationEvent({
+              url, hostname,
+              source: result.source,
+              request_id: ctx.requestId,
+              classification: result.classification.outcome,
+              classification_confidence: result.classification.confidence,
+              classification_method: result.classification.method,
+              classification_latency_us: result.classification.latency_us,
+              article_length: result.article.length,
             });
-          });
-        });
+          }
+        }
 
-        ctx.set("fetch_ms", Date.now() - fetchStart);
+        if (results.length === 0) {
+          ctx.error("All sources failed", { error_type: "ALL_SOURCES_FAILED", status_code: 500 });
+          set.status = 500;
+          return { error: "Failed to fetch from all sources", type: "ALL_SOURCES_FAILED" };
+        }
+
+        // --- RANK: let the classifier decide, not arbitrary weights ---
+        // Sort using classifier tier as primary key, article length as tiebreaker.
+        // The classifier IS the decision maker.
+        const ranked: RankedResult[] = results.map((r, i) => ({ result: r, rank: i }));
+        ranked.sort((a, b) => compareExtractions(
+          { classification: a.result.classification, articleLength: a.result.article.length, source: a.result.source },
+          { classification: b.result.classification, articleLength: b.result.article.length, source: b.result.source },
+        ));
+        // Assign final rank (1 = best)
+        ranked.forEach((r, i) => { r.rank = i + 1; });
+
+        const bestResult = ranked[0].result;
+
+        // Determine selection reason
+        const hasClassifierData = results.some(r => r.classification != null);
+        if (results.length === 1) {
+          selectionReason = "single_source";
+        } else if (hasClassifierData) {
+          selectionReason = "classifier_decided";
+        } else {
+          selectionReason = "fallback_length_reliability";
+        }
         ctx.set("selection_reason", selectionReason);
 
+        // --- SELECT: cache only the winner ---
+        cacheResult(bestResult);
+
+        // Build lightweight per-source metadata for PostHog (before releasing loser articles)
+        const sourceMeta: Record<string, {
+          classification: string | null;
+          classifier_tier: number | null;
+          length: number;
+          confidence: number;
+          rank: number;
+        }> = {};
+        for (const { result: r, rank } of ranked) {
+          sourceMeta[r.source] = {
+            classification: r.classification?.outcome || null,
+            classifier_tier: r.classification ? (CLASSIFIER_TIER[r.classification.outcome] ?? 2) : null,
+            length: r.article.length,
+            confidence: r.classification?.confidence || 0,
+            rank,
+          };
+        }
+
+        // Release loser article data from memory.
+        // We must wipe the heavy string fields (content, textContent, htmlContent)
+        // because multiple arrays (results, ranked, settled) hold references to the
+        // same FetchResult objects — nulling one reference isn't enough.
+        for (let i = 1; i < ranked.length; i++) {
+          const loser = ranked[i].result;
+          if (loser) {
+            // Wipe heavy string fields (~500KB-1MB per article) so GC can reclaim them
+            // even while results/settled arrays still reference the object shell
+            (loser.article as Record<string, unknown>).content = "";
+            (loser.article as Record<string, unknown>).textContent = "";
+            (loser.article as Record<string, unknown>).htmlContent = undefined;
+            loser.classification = null;
+          }
+          (ranked[i] as { result: FetchResult | null }).result = null;
+        }
+        // Also clear all source arrays so no stale references remain.
+        // settled/sourcePromises both hold refs to the same FetchResult objects.
+        results.length = 0;
+        settled.length = 0;
+        sourcePromises.length = 0;
+
         // Emit extraction_outcome tracking event
-        if (bestResult && env.CLASSIFIER_ENABLED) {
-          const oldLogicSource = Object.values(allResults).find(r => r.article.length > 500)?.source || null;
+        if (env.CLASSIFIER_ENABLED) {
+          const oldLogicSource = Object.entries(sourceMeta)
+            .find(([, m]) => m.length > 500)?.[0] || null;
+
           logger.info({
             hostname,
             winning_source: bestResult.source,
             winning_classification: bestResult.classification?.outcome || "unknown",
+            winning_confidence: bestResult.classification?.confidence || 0,
+            winning_tier: bestResult.classification ? (CLASSIFIER_TIER[bestResult.classification.outcome] ?? 2) : null,
             selection_reason: selectionReason,
-            sources: Object.fromEntries(
-              Object.entries(allResults).map(([src, r]) => [src, {
-                classification: r.classification?.outcome || "no_classification",
-                length: r.article.length,
-                confidence: r.classification?.confidence || 0,
-              }])
-            ),
+            sources: sourceMeta,
             classifier_changed_result: oldLogicSource != null && oldLogicSource !== bestResult.source,
             old_logic_would_pick: oldLogicSource,
-          }, `Extraction outcome: ${bestResult.source} won (${bestResult.classification?.outcome || "unknown"})`);
+            total_fetch_ms: totalFetchMs,
+          }, `Extraction outcome: ${bestResult.source} won (tier=${bestResult.classification?.outcome || "no_classifier"}, len=${bestResult.article.length})`);
+
           trackExtractionOutcome({
             url,
             hostname,
@@ -910,41 +976,34 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
             winning_classification: bestResult.classification?.outcome || "unknown",
             winning_confidence: bestResult.classification?.confidence || 0,
             selection_reason: selectionReason,
-            smry_fast_classification: allResults["smry-fast"]?.classification?.outcome || null,
-            smry_fast_length: allResults["smry-fast"]?.article.length || 0,
-            smry_slow_classification: allResults["smry-slow"]?.classification?.outcome || null,
-            smry_slow_length: allResults["smry-slow"]?.article.length || 0,
-            wayback_classification: allResults["wayback"]?.classification?.outcome || null,
-            wayback_length: allResults["wayback"]?.article.length || 0,
+            smry_fast_classification: sourceMeta["smry-fast"]?.classification || null,
+            smry_fast_length: sourceMeta["smry-fast"]?.length || 0,
+            smry_slow_classification: sourceMeta["smry-slow"]?.classification || null,
+            smry_slow_length: sourceMeta["smry-slow"]?.length || 0,
+            wayback_classification: sourceMeta["wayback"]?.classification || null,
+            wayback_length: sourceMeta["wayback"]?.length || 0,
             classifier_changed_result: oldLogicSource != null && oldLogicSource !== bestResult.source,
             old_logic_source: oldLogicSource,
-            total_fetch_ms: Date.now() - fetchStart,
+            total_fetch_ms: totalFetchMs,
           });
         }
 
-        // Return best result
-        if (bestResult) {
-          ctx.merge({
-            cache_hit: false,
-            result_source: bestResult.source,
-            article_length: bestResult.article.length,
-            status_code: 200,
-            winning_source: bestResult.source,
-          });
-          ctx.success();
-          return {
-            source: bestResult.source,
-            cacheURL: bestResult.cacheURL,
-            article: buildArticleResponse(bestResult.article),
-            status: "success",
-            mayHaveEnhanced: bestResult.source === "smry-fast",
-          };
-        }
-
-        // All failed
-        ctx.error("All sources failed", { error_type: "ALL_SOURCES_FAILED", status_code: 500 });
-        set.status = 500;
-        return { error: "Failed to fetch from all sources", type: "ALL_SOURCES_FAILED" };
+        // Return the best result
+        ctx.merge({
+          cache_hit: false,
+          result_source: bestResult.source,
+          article_length: bestResult.article.length,
+          status_code: 200,
+          winning_source: bestResult.source,
+        });
+        ctx.success();
+        return {
+          source: bestResult.source,
+          cacheURL: bestResult.cacheURL,
+          article: buildArticleResponse(bestResult.article),
+          status: "success",
+          mayHaveEnhanced: bestResult.source === "smry-fast",
+        };
       } finally {
         releaseFetchSlot();
       }

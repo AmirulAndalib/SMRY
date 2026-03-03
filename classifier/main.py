@@ -5,18 +5,26 @@ Classifies HTML extraction outcomes using the Allanatrix/Summary_model XGBoost c
 Endpoints: /classify, /classify/batch, /health
 """
 
+import logging
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 from model import classify_html, get_model_info, load_model
+
+logger = logging.getLogger("classifier")
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Load model artifacts on startup (XGBOOST.pt bundled in the image)
-    load_model("XGBOOST.pt")
+    try:
+        load_model("XGBOOST.pt")
+        logger.info("Model loaded successfully")
+    except Exception as e:
+        logger.error("Failed to load model: %s — running in degraded mode", e)
     yield
 
 
@@ -49,7 +57,13 @@ async def classify(req: ClassifyRequest) -> ClassifyResponse:
 
 @app.get("/health")
 async def health():
-    return {"status": "ok", "model": get_model_info()}
+    info = get_model_info()
+    if not info["loaded"]:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "degraded", "model": info},
+        )
+    return {"status": "ok", "model": info}
 
 
 class BatchClassifyRequest(BaseModel):

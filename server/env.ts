@@ -26,8 +26,6 @@ export const env = createEnv({
     // Analytics (PostHog) - optional, gracefully degrades when not set
     POSTHOG_API_KEY: z.string().optional(),
     POSTHOG_HOST: z.string().url().optional(),
-    POSTHOG_PROJECT_ID: z.string().optional(),
-    POSTHOG_PERSONAL_API_KEY: z.string().optional(),
 
     // Alerting
     ALERT_EMAIL: z.string().email(),
@@ -46,9 +44,6 @@ export const env = createEnv({
 
     // Clerk Webhooks
     CLERK_WEBHOOK_SECRET: z.string().min(1),
-
-    // Admin auth
-    ADMIN_SECRET: z.string().min(1),
 
     // Server config
     CORS_ORIGIN: z.string().min(1),

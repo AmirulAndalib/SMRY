@@ -17,10 +17,9 @@ Pipeline labels (5) — mapped from model labels:
   api_provider_error, other_failure, full_page_not_article
 """
 
+import os
 import re
 import time
-from typing import Optional
-
 import joblib
 import numpy as np
 import xgboost
@@ -55,7 +54,9 @@ _AUTH_PATTERNS = re.compile(
 )
 
 # HTML tag stripper for text_to_html_ratio
-_TAG_RE = re.compile(r"<[^>]+>")
+# Use *> (zero-or-more) instead of +> to avoid polynomial backtracking (ReDoS)
+# on unterminated '<' sequences in malicious input.
+_TAG_RE = re.compile(r"<[^>]*>")
 
 # ---------------------------------------------------------------------------
 # Model artifacts (loaded once on startup)
@@ -69,7 +70,17 @@ _model_loaded = False
 
 def load_model(path: str = "XGBOOST.pt") -> None:
     global _scaler, _model, _id_to_label, _model_loaded
-    artifacts = joblib.load(path)
+
+    # Suppress XGBoost deprecation warning about older model format
+    prev_verbosity = os.environ.get("XGBOOST_VERBOSITY")
+    os.environ["XGBOOST_VERBOSITY"] = "0"
+    try:
+        artifacts = joblib.load(path)
+    finally:
+        if prev_verbosity is None:
+            os.environ.pop("XGBOOST_VERBOSITY", None)
+        else:
+            os.environ["XGBOOST_VERBOSITY"] = prev_verbosity
 
     # Validate feature order matches model's training features
     model_features = artifacts.get("features", [])
@@ -182,28 +193,21 @@ def extract_features(html: str, url: str = "", max_chars: int = 64000) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Rule-based fast path
+# Post-model validation rules
 # ---------------------------------------------------------------------------
 
-def apply_rules(features: dict) -> Optional[str]:
-    """Returns pipeline label or None if ambiguous."""
-    # High error signal → api error
-    if features["error_kw"] >= 3:
-        return "api_provider_error"
+def apply_post_rules(label: str, confidence: float, features: dict) -> tuple[str, float]:
+    """Adjust model prediction when feature signals strongly contradict it."""
 
-    # Strong article signals → full article
-    if features["meta_article"] >= 2 and features["n_p"] >= 10:
-        return "full_article_extracted"
+    # Model says full article, but heavy paywall signals → downgrade to partial
+    if label == "full_article_extracted" and features["paywall_kw"] >= 5 and features["n_form"] >= 1:
+        return "partial_article_extracted", confidence * 0.8
 
-    # Navigation-heavy, paragraph-light, link-dense → not an article
-    if features["nav_kw"] >= 5 and features["n_p"] < 5 and features["link_density"] > 20:
-        return "full_page_not_article"
+    # Model says full article, but it's a nav page (link-heavy, no paragraphs)
+    if label == "full_article_extracted" and features["nav_kw"] >= 5 and features["n_p"] < 5 and features["link_density"] > 20:
+        return "full_page_not_article", confidence * 0.7
 
-    # Heavy paywall signals → partial
-    if features["paywall_kw"] >= 5 and features["n_form"] >= 1:
-        return "partial_article_extracted"
-
-    return None  # Ambiguous — use ML model
+    return label, confidence
 
 
 # ---------------------------------------------------------------------------
@@ -213,7 +217,7 @@ def apply_rules(features: dict) -> Optional[str]:
 class ClassifyResponse(BaseModel):
     outcome: str
     confidence: float
-    method: str  # "rule" | "model"
+    method: str  # "model" | "fallback"
     latency_us: int
 
 
@@ -226,46 +230,39 @@ def classify_html(html: str, url: str = "") -> ClassifyResponse:
 
     features = extract_features(html, url=url)
 
-    # Try rule-based fast path first
-    rule_result = apply_rules(features)
-    if rule_result is not None:
-        elapsed_us = int((time.monotonic() - start) * 1_000_000)
-        return ClassifyResponse(
-            outcome=rule_result,
-            confidence=0.95,
-            method="rule",
-            latency_us=elapsed_us,
-        )
-
-    # Fall back to XGBoost model
+    # Model unavailable — use length/feature heuristic as fallback
     if not _model_loaded:
+        label = "other_failure"
+        if features["n_p"] >= 5 and features["text_to_html_ratio"] > 0.3:
+            label = "full_article_extracted"
+        elif features["paywall_kw"] >= 3:
+            label = "partial_article_extracted"
         elapsed_us = int((time.monotonic() - start) * 1_000_000)
         return ClassifyResponse(
-            outcome="full_article_extracted",
+            outcome=label,
             confidence=0.0,
-            method="rule",
+            method="fallback",
             latency_us=elapsed_us,
         )
 
+    # Always run the ML model — no pre-filtering
     X = np.array([features[col] for col in FEATURE_COLS]).reshape(1, -1).astype(np.float32)
     X_scaled = _scaler.transform(X)
     dmatrix = xgboost.DMatrix(X_scaled)
 
-    # Get class prediction
     prediction = int(_model.predict(dmatrix)[0])
     raw_label = _id_to_label.get(prediction, "content_unavailable")
     label = LABEL_MAP.get(raw_label, "other_failure")
 
-    # Get confidence via softmax on raw margins
-    confidence = 0.0
+    # Confidence via softmax on raw margins
     margins = _model.predict(dmatrix, output_margin=True)
-    if margins.ndim == 2:
-        logits = margins[0]
-    else:
-        logits = margins
+    logits = margins[0] if margins.ndim == 2 else margins
     exp_logits = np.exp(logits - logits.max())
     probs = exp_logits / exp_logits.sum()
     confidence = float(probs.max())
+
+    # Post-model corrections — only override when features strongly contradict
+    label, confidence = apply_post_rules(label, confidence, features)
 
     elapsed_us = int((time.monotonic() - start) * 1_000_000)
     return ClassifyResponse(

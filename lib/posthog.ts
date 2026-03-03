@@ -10,8 +10,6 @@ import { PostHog } from "posthog-node";
  * Env vars:
  *   POSTHOG_API_KEY          – project API key (server-side)
  *   POSTHOG_HOST             – PostHog instance URL
- *   POSTHOG_PROJECT_ID       – numeric project ID (for HogQL queries)
- *   POSTHOG_PERSONAL_API_KEY – personal API key (for HogQL query API)
  */
 
 /** One-way hash of IP — groups events by user without storing raw PII */
@@ -172,58 +170,6 @@ export function trackAdEvent(event: Partial<AdEvent>): void {
 }
 
 // ---------------------------------------------------------------------------
-// queryPostHog – HogQL query API
-// ---------------------------------------------------------------------------
-
-const HOGQL_TIMEOUT_MS = 10_000;
-
-export async function queryPostHog<T>(query: string): Promise<T[]> {
-  const host = process.env.POSTHOG_HOST;
-  const projectId = process.env.POSTHOG_PROJECT_ID;
-  const personalApiKey = process.env.POSTHOG_PERSONAL_API_KEY;
-
-  if (!host || !projectId || !personalApiKey) return [];
-
-  try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), HOGQL_TIMEOUT_MS);
-
-    const response = await fetch(`${host}/api/projects/${projectId}/query/`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${personalApiKey}`,
-      },
-      body: JSON.stringify({ query: { kind: "HogQLQuery", query } }),
-      signal: controller.signal,
-    });
-
-    clearTimeout(timeout);
-
-    if (!response.ok) {
-      console.error(`[posthog] HogQL query failed (${response.status}):`, await response.text().catch(() => ""));
-      return [];
-    }
-
-    const data = await response.json();
-    // HogQL returns { columns: string[], results: any[][] }
-    const columns: string[] = data.columns ?? [];
-    const rows: unknown[][] = data.results ?? [];
-
-    return rows.map((row) => {
-      const obj: Record<string, unknown> = {};
-      columns.forEach((col, i) => {
-        obj[col] = row[i];
-      });
-      return obj as T;
-    });
-  } catch (error) {
-    console.error("[posthog] HogQL query error:", error instanceof Error ? error.message : String(error));
-    return [];
-  }
-}
-
-// ---------------------------------------------------------------------------
 // trackLLMGeneration – PostHog LLM analytics ($ai_generation events)
 // See: https://posthog.com/docs/llm-analytics/start-here
 // ---------------------------------------------------------------------------
@@ -275,6 +221,19 @@ export function trackLLMGeneration(event: LLMGenerationEvent): void {
 }
 
 // ---------------------------------------------------------------------------
+// URL sanitization — strip query params and fragments to avoid leaking tokens
+// ---------------------------------------------------------------------------
+
+function sanitizeUrl(url: string): string {
+  try {
+    const parsed = new URL(url);
+    return `${parsed.origin}${parsed.pathname}`;
+  } catch {
+    return url;
+  }
+}
+
+// ---------------------------------------------------------------------------
 // trackClassificationEvent – per-source classification (extraction_classified)
 // ---------------------------------------------------------------------------
 
@@ -299,6 +258,7 @@ export function trackClassificationEvent(props: ClassificationEventProps): void 
     event: "extraction_classified",
     properties: {
       ...props,
+      url: sanitizeUrl(props.url),
       timestamp: new Date().toISOString(),
     },
   });
@@ -336,6 +296,7 @@ export function trackExtractionOutcome(props: ExtractionOutcomeProps): void {
     event: "extraction_outcome",
     properties: {
       ...props,
+      url: sanitizeUrl(props.url),
       timestamp: new Date().toISOString(),
     },
   });

@@ -26,29 +26,30 @@ export interface ClassificationResult {
 export async function classifyHtml(
   html: string,
 ): Promise<ClassificationResult | null> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLASSIFIER_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), CLASSIFIER_TIMEOUT_MS);
     const response = await fetch(`${CLASSIFIER_URL}/classify`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ html: html.slice(0, 64000) }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     if (!response.ok) return null;
     return (await response.json()) as ClassificationResult;
   } catch {
     return null; // Classifier unavailable — fall back to old logic
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
 export async function classifyBatch(
   items: Array<{ html: string; source: string }>,
 ): Promise<Array<ClassificationResult | null>> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), CLASSIFIER_TIMEOUT_MS);
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), CLASSIFIER_TIMEOUT_MS);
     const response = await fetch(`${CLASSIFIER_URL}/classify/batch`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -60,10 +61,11 @@ export async function classifyBatch(
       }),
       signal: controller.signal,
     });
-    clearTimeout(timeout);
     if (!response.ok) return items.map(() => null);
     return (await response.json()) as ClassificationResult[];
   } catch {
     return items.map(() => null);
+  } finally {
+    clearTimeout(timeout);
   }
 }
