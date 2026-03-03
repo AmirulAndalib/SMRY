@@ -163,7 +163,7 @@ async function saveOrReturnLongerArticle(key: string, newArticle: CachedArticle,
   }
 }
 
-async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSignal): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
+async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout for direct fetch
   // Combine internal timeout with external cancellation signal
@@ -222,7 +222,7 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
     }
 
     // Run Readability parsing and classification in parallel — classification adds 0ms to critical path
-    const classificationPromise = env.CLASSIFIER_ENABLED
+    const classificationPromise = classify && env.CLASSIFIER_ENABLED
       ? classifyHtml(html, url).catch(() => null)
       : Promise.resolve(null);
 
@@ -299,7 +299,7 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
  * instead of going through Diffbot. Archive.org doesn't block server-side requests,
  * so this reliably works for paywalled sites like NYTimes where Diffbot gets 403'd.
  */
-async function fetchArticleWithWaybackDirect(url: string, externalSignal?: AbortSignal): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
+async function fetchArticleWithWaybackDirect(url: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const waybackUrl = `https://web.archive.org/web/2/${url}`;
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 15000); // 15s timeout for Wayback
@@ -346,7 +346,7 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
     html = html.replace(/<!-- BEGIN WAYBACK TOOLBAR INSERT -->[\s\S]*?<!-- END WAYBACK TOOLBAR INSERT -->/gi, "");
 
     // Run Readability parsing and classification in parallel
-    const classificationPromise = env.CLASSIFIER_ENABLED
+    const classificationPromise = classify && env.CLASSIFIER_ENABLED
       ? classifyHtml(html, url).catch(() => null)
       : Promise.resolve(null);
 
@@ -415,7 +415,7 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
   }
 }
 
-async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: string, externalSignal?: AbortSignal): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
+async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const hostname = (() => { try { return new URL(urlWithSource).hostname; } catch { return "unknown"; } })();
   const memTracker = startMemoryTrack(`article-fetch-${source}`, { url_host: hostname, source });
 
@@ -443,7 +443,7 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
     const textDir = getTextDirection(va.lang, va.text);
 
     // Classify the HTML content from Diffbot (in parallel with cache ops)
-    const classification = env.CLASSIFIER_ENABLED && va.htmlContent
+    const classification = classify && env.CLASSIFIER_ENABLED && va.htmlContent
       ? await classifyHtml(va.htmlContent, urlWithSource).catch(() => null)
       : null;
 
@@ -828,14 +828,15 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
       };
 
       // Fire all 3 sources in parallel — no abort signal, equal opportunity
+      // classify=true only here (/article/auto) — single-source /article doesn't need it
       const sourcePromises: Promise<FetchResult | null>[] = [
-        fetchArticleWithSmryFast(url).then(r =>
+        fetchArticleWithSmryFast(url, undefined, true).then(r =>
           "article" in r ? { source: "smry-fast" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
         ).catch(() => null),
-        fetchArticleWithWaybackDirect(url).then(r =>
+        fetchArticleWithWaybackDirect(url, undefined, true).then(r =>
           "article" in r ? { source: "wayback" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
         ).catch(() => null),
-        fetchArticleWithDiffbotWrapper(url, "smry-slow").then(r =>
+        fetchArticleWithDiffbotWrapper(url, "smry-slow", undefined, true).then(r =>
           "article" in r ? { source: "smry-slow" as const, article: r.article, cacheURL: r.cacheURL, classification: r.classification } : null
         ).catch(() => null),
       ];
