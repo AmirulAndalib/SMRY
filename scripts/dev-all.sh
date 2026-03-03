@@ -25,7 +25,7 @@ cleanup() {
   exit 0
 }
 
-trap cleanup SIGINT SIGTERM
+trap cleanup SIGINT SIGTERM EXIT
 
 # --- Classifier ---
 # Build image if it doesn't exist
@@ -61,14 +61,16 @@ for i in $(seq 1 20); do
   sleep 1
 done
 
-if ! curl -sf "http://localhost:$CLASSIFIER_PORT/health" >/dev/null 2>&1; then
+if curl -sf "http://localhost:$CLASSIFIER_PORT/health" >/dev/null 2>&1; then
+  export CLASSIFIER_URL="http://localhost:$CLASSIFIER_PORT"
+  export CLASSIFIER_ENABLED="true"
+else
   echo " FAILED (continuing without classifier)"
+  export CLASSIFIER_ENABLED="false"
 fi
 
 # --- App (Elysia + Next.js) ---
 echo "Starting app (Elysia + Next.js)..."
-export CLASSIFIER_URL="http://localhost:$CLASSIFIER_PORT"
-export CLASSIFIER_ENABLED="true"
 
 # Start Elysia + Next.js (same as original dev command)
 bun run --watch server/index.ts & APP_PID=$!
@@ -84,6 +86,5 @@ echo "  Press Ctrl+C to stop all services"
 echo "============================="
 echo ""
 
-# Wait for any child to exit
-wait $APP_PID $NEXT_PID 2>/dev/null
-cleanup
+# Wait for any child to exit (|| true prevents set -e from skipping cleanup)
+wait $APP_PID $NEXT_PID 2>/dev/null || true

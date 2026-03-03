@@ -282,8 +282,6 @@ export interface ExtractionOutcomeProps {
   smry_slow_length: number;
   wayback_classification: string | null;
   wayback_length: number;
-  classifier_changed_result: boolean;
-  old_logic_source: string | null;
   total_fetch_ms: number;
 }
 

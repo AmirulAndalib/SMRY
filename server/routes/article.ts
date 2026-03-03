@@ -952,9 +952,6 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
 
         // Emit extraction_outcome tracking event
         if (env.CLASSIFIER_ENABLED) {
-          const oldLogicSource = Object.entries(sourceMeta)
-            .find(([, m]) => m.length > 500)?.[0] || null;
-
           logger.info({
             hostname,
             winning_source: bestResult.source,
@@ -963,8 +960,6 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
             winning_tier: bestResult.classification ? (CLASSIFIER_TIER[bestResult.classification.outcome] ?? 2) : null,
             selection_reason: selectionReason,
             sources: sourceMeta,
-            classifier_changed_result: oldLogicSource != null && oldLogicSource !== bestResult.source,
-            old_logic_would_pick: oldLogicSource,
             total_fetch_ms: totalFetchMs,
           }, `Extraction outcome: ${bestResult.source} won (tier=${bestResult.classification?.outcome || "no_classifier"}, len=${bestResult.article.length})`);
 
@@ -982,8 +977,6 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
             smry_slow_length: sourceMeta["smry-slow"]?.length || 0,
             wayback_classification: sourceMeta["wayback"]?.classification || null,
             wayback_length: sourceMeta["wayback"]?.length || 0,
-            classifier_changed_result: oldLogicSource != null && oldLogicSource !== bestResult.source,
-            old_logic_source: oldLogicSource,
             total_fetch_ms: totalFetchMs,
           });
         }
@@ -1002,7 +995,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
           cacheURL: bestResult.cacheURL,
           article: buildArticleResponse(bestResult.article),
           status: "success",
-          mayHaveEnhanced: bestResult.source === "smry-fast",
+          mayHaveEnhanced: false, // All sources already evaluated by classifier
         };
       } finally {
         releaseFetchSlot();
