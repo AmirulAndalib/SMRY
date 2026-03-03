@@ -27,9 +27,6 @@ export const env = createEnv({
     POSTHOG_API_KEY: z.string().optional(),
     POSTHOG_HOST: z.string().url().optional(),
 
-    // Alerting
-    ALERT_EMAIL: z.string().email(),
-
     // Gravity Ads
     GRAVITY_API_KEY: z.string().min(1),
 

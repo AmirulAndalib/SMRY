@@ -223,7 +223,7 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
 
     // Run Readability parsing and classification in parallel — classification adds 0ms to critical path
     const classificationPromise = env.CLASSIFIER_ENABLED
-      ? classifyHtml(html).catch(() => null)
+      ? classifyHtml(html, url).catch(() => null)
       : Promise.resolve(null);
 
     const { document } = parseHTML(html);
@@ -347,7 +347,7 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
 
     // Run Readability parsing and classification in parallel
     const classificationPromise = env.CLASSIFIER_ENABLED
-      ? classifyHtml(html).catch(() => null)
+      ? classifyHtml(html, url).catch(() => null)
       : Promise.resolve(null);
 
     const { document } = parseHTML(html);
@@ -444,7 +444,7 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
 
     // Classify the HTML content from Diffbot (in parallel with cache ops)
     const classification = env.CLASSIFIER_ENABLED && va.htmlContent
-      ? await classifyHtml(va.htmlContent).catch(() => null)
+      ? await classifyHtml(va.htmlContent, urlWithSource).catch(() => null)
       : null;
 
     // Cache full htmlContent separately, then keep only a 50KB preview for bypass detection
