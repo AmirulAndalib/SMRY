@@ -542,8 +542,15 @@ function compareExtractions(
     return b.classification!.confidence - a.classification!.confidence;
   }
 
-  // Only one has classifier — the classified result wins (we trust classifier over guessing)
-  if (aHasCls !== bHasCls) return aHasCls ? -1 : 1;
+  // Only one has classifier — trust it only if the result is reasonable (tier 0-2).
+  // A classified "not_article" (tier 4) or "api_error" (tier 3) shouldn't beat
+  // an unclassified source that may have a long, complete article.
+  if (aHasCls !== bHasCls) {
+    const classified = aHasCls ? a : b;
+    const tier = CLASSIFIER_TIER[classified.classification!.outcome] ?? 2;
+    if (tier <= 2) return aHasCls ? -1 : 1; // good classification wins
+    return aHasCls ? 1 : -1; // bad classification loses to unclassified
+  }
 
   // Neither has classifier — fall back to length × reliability
   const scoreA = Math.min(a.articleLength / 10000, 1.0) * 0.70 + (SOURCE_RELIABILITY[a.source] ?? 0.5) * 0.30;

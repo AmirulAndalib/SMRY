@@ -22,7 +22,7 @@ XGBoost ML classifier that evaluates HTML extraction quality from each source (s
                       v    v    v
                    +--------------+
                    | CLASSIFY      |  XGBoost model classifies each
-                   | (model-first) |  result into a tier
+                   | (model-only)  |  result into a tier
                    +------+-------+
                           |
                    +------v-------+
@@ -41,13 +41,13 @@ XGBoost ML classifier that evaluates HTML extraction quality from each source (s
 
 All 3 extraction sources run to completion via `Promise.allSettled()`. No early abort, no speed bias. Every source gets equal opportunity regardless of how fast it responds.
 
+Classification runs in parallel with Readability parsing inside each fetch function (adds 0ms to critical path). The single-source `/article` endpoint skips classification entirely via a `classify` flag — only `/article/auto` uses it.
+
 ### Classify Phase
 
-Every source result is sent to the classifier microservice. The XGBoost model always runs — there are no pre-filters or rules that bypass the model. This ensures consistent, accurate classification across all input types.
+Every source result is sent to the classifier microservice. The XGBoost model's prediction is used directly — no post-model rules override the model's decision. The model was trained on 138k samples with ~90% accuracy and already considers all relevant features (paywall keywords, nav signals, form density, etc.) in its learned decision boundary.
 
-Post-model validation only fires in two extreme cases:
-- Model says "full article" but heavy paywall signals detected (5+ paywall keywords + forms) → downgraded to partial
-- Model says "full article" but it's clearly a nav page (link-heavy, no paragraphs) → downgraded to not_article
+The classifier service uses sync `def` handlers (not `async def`) so FastAPI runs CPU-bound XGBoost inference in a threadpool worker instead of blocking the asyncio event loop. This allows concurrent classification requests to be processed in parallel.
 
 ### Select Phase
 
@@ -57,7 +57,11 @@ Sources are ranked using a comparator:
 2. **Longest article** — within the same tier, more content = better extraction
 3. **Highest confidence** — tiebreaker when tier and length are identical
 
-Only the winning source is cached to Redis. Losers are released from memory.
+When only one source has classification data:
+- If classified as tier 0-2 (good result), the classified source wins
+- If classified as tier 3-4 (bad result like `not_article` or `api_error`), the unclassified source wins — a confirmed-bad classification shouldn't beat a potentially good unclassified article
+
+Only the winning source is cached to Redis. Losers are released from memory immediately (content fields wiped, arrays cleared).
 
 ### When Classifier is Unavailable
 
@@ -83,11 +87,11 @@ Rollback: set `CLASSIFIER_ENABLED=false` (env var change, no redeploy needed).
 |----------|-------|
 | Algorithm | XGBoost Booster (multi:softmax, 7 classes → 5 pipeline tiers) |
 | Source | [Allanatrix/Summary_model](https://huggingface.co/Allanatrix/Summary_model) |
-| Accuracy | ~85% on test set |
+| Accuracy | ~90% on test set |
 | Inference | <17ms per classification (includes feature extraction) |
 | Features | 27 (HTML structure, keyword counts, tag densities, URL patterns) |
 | File | `classifier/XGBOOST.pt` (1.3MB, joblib-serialized, XGBoost 2.1.3) |
-| Approach | Model-first — all inputs go through XGBoost, no pre-filtering rules |
+| Approach | Model-only — all inputs go through XGBoost, no post-model rules |
 
 ### Model Labels (7 classes → 5 pipeline labels)
 
@@ -119,7 +123,7 @@ bun dev
 `bun dev` automatically:
 1. Builds the classifier Docker image (first run only)
 2. Starts the classifier container on port 8000
-3. Waits for health check
+3. Waits for health check — sets `CLASSIFIER_ENABLED=true` only if healthy
 4. Starts Elysia API + Next.js with classifier env vars set
 
 Other commands:
@@ -171,7 +175,7 @@ railway logs --service classifier
 | Root Directory | `classifier/` |
 | Builder | Dockerfile |
 | Port | `8000` |
-| Health Check | `/health` |
+| Health Check | `/health` (returns 200 in both healthy and degraded mode) |
 | Memory | 512 MB |
 | Restart | Always |
 
@@ -182,7 +186,7 @@ railway logs --service classifier
 | `CLASSIFIER_URL` | No | `http://localhost:8000` | Classifier service URL |
 | `CLASSIFIER_ENABLED` | No | `false` | Set `true` to activate classifier-based selection |
 
-When `CLASSIFIER_ENABLED=false`, the system falls back to the old ">500 chars first-wins" heuristic.
+When `CLASSIFIER_ENABLED=false`, the system falls back to length x reliability scoring.
 
 ## Monitoring
 
@@ -215,25 +219,24 @@ Extraction outcome: smry-slow won (tier=full_article_extracted, len=13409)
 | `classification_latency_us` | `16000` |
 | `article_length` | `13384` |
 
-**`extraction_outcome`** — 1 per request, the final decision:
+**`extraction_outcome`** — 1 per request (only emitted when at least one source was classified):
 
 | Property | Example |
 |----------|---------|
 | `winning_source` | `smry-slow` |
 | `winning_classification` | `full_article_extracted` |
+| `winning_confidence` | `0.43` |
 | `selection_reason` | `classifier_decided` / `fallback_length_reliability` / `single_source` |
 | `smry_fast_classification` | `full_article_extracted` |
 | `smry_fast_length` | `13384` |
-| `classifier_changed_result` | `true` |
-| `old_logic_source` | `smry-fast` (what >500 chars first-wins would have picked) |
 | `total_fetch_ms` | `7703` |
 
 ### PostHog Insights to Build
 
 1. **Source win rate**: Trends → `extraction_outcome` → breakdown by `winning_source`
-2. **Classifier impact**: Trends → `extraction_outcome` → filter `classifier_changed_result = true`
-3. **Tier distribution**: Trends → `extraction_classified` → breakdown by `classification` → then by `source`
-4. **Latency**: Distribution → `extraction_outcome` → `total_fetch_ms`
+2. **Tier distribution**: Trends → `extraction_classified` → breakdown by `classification` → then by `source`
+3. **Latency**: Distribution → `extraction_outcome` → `total_fetch_ms`
+4. **Classifier availability**: Trends → `extraction_outcome` → breakdown by `selection_reason`
 
 ## Production Performance
 
@@ -245,15 +248,16 @@ Extraction outcome: smry-slow won (tier=full_article_extracted, len=13409)
 | Cache miss, typical | 5-8s (all 3 sources finish) |
 | Cache miss, worst case | ~15s (slowest source timeout) |
 | Classifier down | Same latency (selection degrades gracefully) |
+| Classifier timeout | 5s (runs in parallel with source fetches, not additive) |
 
 ### Memory (4GB server)
 
 | Component | Usage |
 |-----------|-------|
-| App server baseline | ~200 MB RSS |
-| Per article request peak | ~6 MB (3 sources x 2MB HTML) |
-| After winner selected | ~2 MB (losers released) |
-| Classifier service (2 workers) | ~240 MB RSS (separate container) |
+| App server baseline | ~300 MB RSS |
+| Per article request peak | ~1.5 MB (3 sources, HTML + parsed) |
+| After winner selected | ~0.5 MB (losers wiped) |
+| Classifier service (4 workers) | ~400 MB RSS (separate container) |
 
 ### Scale Estimates
 
@@ -262,12 +266,13 @@ Extraction outcome: smry-slow won (tier=full_article_extracted, len=13409)
 | Avg req/s | ~5 | ~13 |
 | Peak req/s | ~25 | ~65 |
 | Classifier calls/s (peak) | ~75 (3 per req) | ~195 |
-| Fetch slots needed | 50 (default) | 75-100 |
-| Classifier workers | 2 | 4 |
-| Classifier memory | 240 MB | 480 MB |
+| Fetch slots needed | 75 (default) | 75-100 |
+| Classifier workers | 4 (default) | 4-8 |
+| Classifier memory | 400 MB | 400-800 MB |
 
 ### Tuning for Scale
 
-- Increase `MAX_CONCURRENT_ARTICLE_FETCHES` env var if you see 503 OVERLOADED responses
-- Increase classifier workers in `Dockerfile` CMD (`--workers 4`)
+- Increase `MAX_CONCURRENT_ARTICLE_FETCHES` env var (default: 75) if you see 503 OVERLOADED responses
+- Increase classifier workers in `Dockerfile` CMD (default: `--workers 4`)
+- Increase classifier timeout in `lib/classifier-client.ts` (default: 5s) if classifier queue backs up
 - Cache hit rate improves over time — at steady state ~60-70% of requests are cache hits

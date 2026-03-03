@@ -11,7 +11,7 @@
 import { env } from "../server/env";
 
 const CLASSIFIER_URL = env.CLASSIFIER_URL || "http://localhost:8000";
-const CLASSIFIER_TIMEOUT_MS = 3000;
+const CLASSIFIER_TIMEOUT_MS = 5000;
 
 export interface ClassificationResult {
   outcome:

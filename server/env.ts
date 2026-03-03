@@ -45,7 +45,7 @@ export const env = createEnv({
     // Server config
     CORS_ORIGIN: z.string().min(1),
     API_PORT: z.coerce.number().default(Number(process.env.PORT) || 3001),
-    MAX_CONCURRENT_ARTICLE_FETCHES: z.coerce.number().default(50),
+    MAX_CONCURRENT_ARTICLE_FETCHES: z.coerce.number().default(75),
     ARTICLE_FETCH_SLOT_TIMEOUT_MS: z.coerce.number().default(30000),
     // Inworld AI TTS (optional — TTS disabled when absent)
     INWORLD_API_KEY: z.string().min(1).optional(),

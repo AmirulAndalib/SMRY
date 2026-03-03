@@ -33,7 +33,7 @@ app = FastAPI(title="SMRY Article Classifier", lifespan=lifespan)
 class ClassifyRequest(BaseModel):
     html: str  # Raw HTML string (first 64KB used)
     source: str = ""  # Optional: which extraction source
-    url: str = ""  # Optional: for logging
+    url: str = ""  # Optional: article URL for url_has_auth feature
 
 
 class ClassifyResponse(BaseModel):
@@ -43,8 +43,10 @@ class ClassifyResponse(BaseModel):
     latency_us: int  # Microseconds for classification
 
 
+# Use `def` (not `async def`) so FastAPI runs CPU-bound inference in a
+# threadpool worker instead of blocking the asyncio event loop.
 @app.post("/classify", response_model=ClassifyResponse)
-async def classify(req: ClassifyRequest) -> ClassifyResponse:
+def classify(req: ClassifyRequest) -> ClassifyResponse:
     result = classify_html(req.html, url=req.url)
     return ClassifyResponse(
         outcome=result.outcome,
@@ -55,7 +57,7 @@ async def classify(req: ClassifyRequest) -> ClassifyResponse:
 
 
 @app.get("/health")
-async def health():
+def health():
     info = get_model_info()
     if not info["loaded"]:
         # Return 200 so Docker HEALTHCHECK doesn't restart the container.
@@ -70,7 +72,7 @@ class BatchClassifyRequest(BaseModel):
 
 
 @app.post("/classify/batch", response_model=list[ClassifyResponse])
-async def classify_batch(req: BatchClassifyRequest) -> list[ClassifyResponse]:
+def classify_batch(req: BatchClassifyRequest) -> list[ClassifyResponse]:
     results = []
     for item in req.items:
         r = classify_html(item.html, url=item.url)

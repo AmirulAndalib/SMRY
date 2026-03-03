@@ -24,7 +24,7 @@ The pipeline then selects the winner: best tier > longest article > highest conf
 |----------|-------|
 | Source | [Allanatrix/Summary_model](https://huggingface.co/Allanatrix/Summary_model) |
 | Algorithm | XGBoost Booster (multi:softmax, 92 boosted rounds) |
-| Accuracy | ~85% on test set |
+| Accuracy | ~90% on test set |
 | Inference | <17ms per classification |
 | Features | 27 (HTML structure, keyword counts, tag densities, URL patterns) |
 | File | `XGBOOST.pt` (1.3MB, joblib-serialized, XGBoost 2.1.3) |
@@ -83,7 +83,7 @@ Classify multiple extractions in one request.
 {"status": "ok", "model": {"loaded": true, "features": 27, ...}}
 ```
 
-Returns 503 with `{"status": "degraded"}` if model failed to load.
+Returns `{"status": "degraded"}` (HTTP 200) if model failed to load — keeps Docker healthcheck passing to avoid restart loops.
 
 ## Running Locally
 

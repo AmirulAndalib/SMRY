@@ -201,24 +201,6 @@ def extract_features(html: str, url: str = "", max_chars: int = 64000) -> dict:
 
 
 # ---------------------------------------------------------------------------
-# Post-model validation rules
-# ---------------------------------------------------------------------------
-
-def apply_post_rules(label: str, confidence: float, features: dict) -> tuple[str, float]:
-    """Adjust model prediction when feature signals strongly contradict it."""
-
-    # Model says full article, but heavy paywall signals → downgrade to partial
-    if label == "full_article_extracted" and features["paywall_kw"] >= 5 and features["n_form"] >= 1:
-        return "partial_article_extracted", confidence * 0.8
-
-    # Model says full article, but it's a nav page (link-heavy, no paragraphs)
-    if label == "full_article_extracted" and features["nav_kw"] >= 5 and features["n_p"] < 5 and features["link_density"] > 20:
-        return "full_page_not_article", confidence * 0.7
-
-    return label, confidence
-
-
-# ---------------------------------------------------------------------------
 # Classification response
 # ---------------------------------------------------------------------------
 
@@ -269,9 +251,6 @@ def classify_html(html: str, url: str = "") -> ClassifyResponse:
         raw_label = _id_to_label.get(prediction, "content_unavailable")
         label = LABEL_MAP.get(raw_label, "other_failure")
         confidence = float(probs.max())
-
-        # Post-model corrections — only override when features strongly contradict
-        label, confidence = apply_post_rules(label, confidence, features)
 
         elapsed_us = int((time.monotonic() - start) * 1_000_000)
         return ClassifyResponse(
