@@ -950,8 +950,9 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         settled.length = 0;
         sourcePromises.length = 0;
 
-        // Emit extraction_outcome tracking event
-        if (env.CLASSIFIER_ENABLED) {
+        // Emit extraction_outcome tracking event (only when at least one source got classified)
+        const hasClassification = Object.values(sourceMeta).some(m => m.classification != null);
+        if (env.CLASSIFIER_ENABLED && hasClassification) {
           logger.info({
             hostname,
             winning_source: bestResult.source,

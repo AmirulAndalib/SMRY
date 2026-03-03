@@ -253,29 +253,44 @@ def classify_html(html: str, url: str = "") -> ClassifyResponse:
             latency_us=elapsed_us,
         )
 
-    # Always run the ML model — no pre-filtering
-    X = np.array([features[col] for col in FEATURE_COLS]).reshape(1, -1).astype(np.float32)
-    X_scaled = _scaler.transform(X)
-    dmatrix = xgboost.DMatrix(X_scaled)
+    # Run the ML model — fall back to heuristic on any inference error
+    try:
+        X = np.array([features[col] for col in FEATURE_COLS]).reshape(1, -1).astype(np.float32)
+        X_scaled = _scaler.transform(X)
+        dmatrix = xgboost.DMatrix(X_scaled)
 
-    # Single inference call — derive both prediction and confidence from margins
-    margins = _model.predict(dmatrix, output_margin=True)
-    logits = margins[0] if margins.ndim == 2 else margins
-    exp_logits = np.exp(logits - logits.max())
-    probs = exp_logits / exp_logits.sum()
+        # Single inference call — derive both prediction and confidence from margins
+        margins = _model.predict(dmatrix, output_margin=True)
+        logits = margins[0] if margins.ndim == 2 else margins
+        exp_logits = np.exp(logits - logits.max())
+        probs = exp_logits / exp_logits.sum()
 
-    prediction = int(np.argmax(probs))
-    raw_label = _id_to_label.get(prediction, "content_unavailable")
-    label = LABEL_MAP.get(raw_label, "other_failure")
-    confidence = float(probs.max())
+        prediction = int(np.argmax(probs))
+        raw_label = _id_to_label.get(prediction, "content_unavailable")
+        label = LABEL_MAP.get(raw_label, "other_failure")
+        confidence = float(probs.max())
 
-    # Post-model corrections — only override when features strongly contradict
-    label, confidence = apply_post_rules(label, confidence, features)
+        # Post-model corrections — only override when features strongly contradict
+        label, confidence = apply_post_rules(label, confidence, features)
 
-    elapsed_us = int((time.monotonic() - start) * 1_000_000)
-    return ClassifyResponse(
-        outcome=label,
-        confidence=confidence,
-        method="model",
-        latency_us=elapsed_us,
-    )
+        elapsed_us = int((time.monotonic() - start) * 1_000_000)
+        return ClassifyResponse(
+            outcome=label,
+            confidence=confidence,
+            method="model",
+            latency_us=elapsed_us,
+        )
+    except Exception:
+        # Inference failed — return heuristic fallback instead of 500
+        label = "other_failure"
+        if features["n_p"] >= 5 and features["text_to_html_ratio"] > 0.3:
+            label = "full_article_extracted"
+        elif features["paywall_kw"] >= 3:
+            label = "partial_article_extracted"
+        elapsed_us = int((time.monotonic() - start) * 1_000_000)
+        return ClassifyResponse(
+            outcome=label,
+            confidence=0.0,
+            method="fallback",
+            latency_us=elapsed_us,
+        )

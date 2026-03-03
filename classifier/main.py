@@ -40,7 +40,7 @@ class ClassifyRequest(BaseModel):
 class ClassifyResponse(BaseModel):
     outcome: str  # full_article_extracted | partial_article_extracted | etc.
     confidence: float  # 0-1
-    method: str  # "rule" | "model"
+    method: str  # "model" | "fallback"
     latency_us: int  # Microseconds for classification
 
 
