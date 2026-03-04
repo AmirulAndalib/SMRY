@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback } from "react";
-import { usePostHog } from "posthog-js/react";
+import { usePostHog } from "@posthog/react";
 import { useIsPremium } from "./use-is-premium";
 
 // Tracked events — only high-value, decision-driving analytics.

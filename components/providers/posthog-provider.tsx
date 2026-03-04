@@ -1,7 +1,7 @@
 "use client";
 
 import posthog from "posthog-js";
-import { PostHogProvider as PHProvider } from "posthog-js/react";
+import { PostHogProvider as PHProvider } from "@posthog/react";
 import { useEffect } from "react";
 
 /**
@@ -16,38 +16,34 @@ import { useEffect } from "react";
  *
  * Enabled:
  *   - heatmaps (understand where users spend time)
- *   - 9 custom events via useAnalytics hook
+ *   - 7 custom events via useAnalytics hook
  */
-function initPostHog() {
-  const key = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-  const host = process.env.NEXT_PUBLIC_POSTHOG_HOST;
-  if (!key || !host || typeof window === "undefined") return;
-  if (posthog.__loaded) return;
-
-  posthog.init(key, {
-    api_host: host,
-    autocapture: false,
-    capture_pageview: false,
-    capture_pageleave: false,
-    disable_session_recording: true,
-    enable_heatmaps: true,
-    person_profiles: "identified_only",
-    respect_dnt: true,
-  });
-}
-
 export function PostHogProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
-    initPostHog();
+    if (typeof window === "undefined") return;
+    if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) return;
+    if (posthog.__loaded) return;
+
+    posthog.init(process.env.NEXT_PUBLIC_POSTHOG_KEY, {
+      api_host: process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com",
+      autocapture: false,
+      capture_pageview: false,
+      capture_pageleave: false,
+      disable_session_recording: true,
+      enable_heatmaps: true,
+      person_profiles: "identified_only",
+      respect_dnt: true,
+      loaded: (ph) => {
+        if (process.env.NODE_ENV === "development") {
+          ph.debug();
+        }
+      },
+    });
   }, []);
 
   if (!process.env.NEXT_PUBLIC_POSTHOG_KEY) {
     return <>{children}</>;
   }
 
-  return (
-    <PHProvider client={posthog}>
-      {children}
-    </PHProvider>
-  );
+  return <PHProvider client={posthog}>{children}</PHProvider>;
 }
