@@ -202,7 +202,7 @@ export function configureTTSLimiter(opts: {
   if (opts.maxConcurrent !== undefined) maxConcurrentTTS = opts.maxConcurrent;
   if (opts.maxPerUser !== undefined) maxPerUser = opts.maxPerUser;
   if (opts.slotTimeout !== undefined) slotTimeoutMs = opts.slotTimeout;
-  logger.info(
+  logger.debug(
     { maxConcurrentTTS, maxPerUser, slotTimeoutMs },
     "TTS concurrency limiter configured",
   );

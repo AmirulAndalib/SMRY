@@ -145,7 +145,7 @@ function cleanupExpiredClients(): void {
   }
 
   if (expiredClientKeys.length > 0) {
-    logger.info({ count: expiredClientKeys.length }, "Cleaning up expired MCP signal clients");
+    logger.debug({ count: expiredClientKeys.length }, "Cleaning up expired MCP signal clients");
     for (const key of expiredClientKeys) {
       const cached = clientCache.get(key);
       if (cached) {
@@ -179,7 +179,7 @@ function cleanupExpiredClients(): void {
   }
 
   if (failuresRemoved > 0) {
-    logger.info({ removed: failuresRemoved, remaining: sessionFailures.size }, "Cleaned up session failure entries");
+    logger.debug({ removed: failuresRemoved, remaining: sessionFailures.size }, "Cleaned up session failure entries");
   }
 }
 
@@ -195,7 +195,7 @@ function evictOldestClients(count: number): void {
     clientCache.delete(key);
     closeClientFireAndForget(cached.client);
   }
-  logger.info({ count, cacheSize: clientCache.size }, "Evicted oldest MCP signal clients");
+  logger.debug({ count, cacheSize: clientCache.size }, "Evicted oldest MCP signal clients");
 }
 
 // Start periodic cleanup
@@ -227,7 +227,7 @@ export function shutdownSignalClient(): void {
 
   const clientCount = clientCache.size;
   if (clientCount > 0) {
-    logger.info({ count: clientCount }, "Closing all MCP signal clients on shutdown");
+    logger.debug({ count: clientCount }, "Closing all MCP signal clients on shutdown");
     for (const cached of clientCache.values()) {
       closeClientFireAndForget(cached.client);
     }
@@ -341,7 +341,7 @@ async function getOrCreateSignalClient(userContext: {
 
     // Clear any previous failure for this session
     sessionFailures.delete(cacheKey);
-    logger.info({
+    logger.debug({
       sessionId: cacheKey.slice(-8),
       cacheSize: clientCache.size,
       created: totalClientsCreated,
@@ -422,7 +422,7 @@ export async function broadcastArticleSignal(article: {
       },
     });
     memTracker.end({ success: true });
-    logger.info({ url: article.url, result: JSON.stringify(result).slice(0, 200) }, "Article signal broadcasted");
+    logger.debug({ url: article.url, result: JSON.stringify(result).slice(0, 200) }, "Article signal broadcasted");
   } catch (error) {
     const errorMsg = String(error);
     const isConnectionError = errorMsg.includes("ECONNRESET") || errorMsg.includes("socket") || errorMsg.includes("closed");
@@ -435,7 +435,7 @@ export async function broadcastArticleSignal(article: {
       if (cached) {
         clientCache.delete(article.sessionId);
         closeClientFireAndForget(cached.client);
-        logger.info({ sessionId: article.sessionId.slice(-8) }, "Removed failed client from cache");
+        logger.debug({ sessionId: article.sessionId.slice(-8) }, "Removed failed client from cache");
       }
       // Set per-session cooldown (doesn't block other users)
       sessionFailures.set(article.sessionId, Date.now());
@@ -486,7 +486,7 @@ export async function fetchZeroClickOffers(context: {
   if (context.origin) body.origin = context.origin;
   if (context.userLocale) body.userLocale = context.userLocale;
 
-  logger.info({ query: context.query.slice(0, 80), limit: context.limit }, "Fetching ZeroClick offers");
+  logger.debug({ query: context.query.slice(0, 80), limit: context.limit }, "Fetching ZeroClick offers");
 
   // Try up to 2 times (initial + 1 retry on empty)
   for (let attempt = 0; attempt < 2; attempt++) {
@@ -519,13 +519,13 @@ export async function fetchZeroClickOffers(context: {
       const offers: ZeroClickOffer[] = Array.isArray(data) ? data : data?.offers ?? [];
 
       if (offers.length === 0 && attempt === 0) {
-        logger.info({ attempt, rawResponse: JSON.stringify(data).slice(0, 200) }, "ZeroClick returned 0 offers, retrying...");
+        logger.debug({ attempt, rawResponse: JSON.stringify(data).slice(0, 200) }, "ZeroClick returned 0 offers, retrying...");
         // Brief pause before retry
         await new Promise(r => setTimeout(r, 300));
         continue;
       }
 
-      logger.info({ count: offers.length, requested: context.limit, attempt }, "ZeroClick offers received");
+      logger.debug({ count: offers.length, requested: context.limit, attempt }, "ZeroClick offers received");
       memTracker.end({ success: true, offer_count: offers.length, attempt });
       return offers;
     } catch (error) {

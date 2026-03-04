@@ -173,7 +173,7 @@ async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSigna
   const memTracker = startMemoryTrack("article-fetch-smry-fast", { url_host: hostname });
 
   try {
-    logger.info({ source: "smry-fast", hostname }, "Fetching article directly");
+    logger.debug({ source: "smry-fast", hostname }, "Fetching article directly");
     const fetchStart = Date.now();
 
     const response = await fetch(url, {
@@ -309,7 +309,7 @@ async function fetchArticleWithWaybackDirect(url: string, externalSignal?: Abort
   const memTracker = startMemoryTrack("article-fetch-wayback-direct", { url_host: hostname });
 
   try {
-    logger.info({ source: "wayback", hostname }, "Fetching article directly from Wayback Machine");
+    logger.debug({ source: "wayback", hostname }, "Fetching article directly from Wayback Machine");
 
     const response = await fetch(waybackUrl, {
       headers: {
@@ -424,7 +424,7 @@ async function fetchArticleWithDiffbotWrapper(urlWithSource: string, source: str
       memTracker.end({ success: false, reason: "aborted_before_start" });
       return { error: createNetworkError("Request cancelled (race loser)", urlWithSource, 499) };
     }
-    logger.info({ source, hostname }, "Fetching article with Diffbot");
+    logger.debug({ source, hostname }, "Fetching article with Diffbot");
     const diffbotResult = await fetchArticleWithDiffbot(urlWithSource, source, externalSignal);
     if (diffbotResult.isErr()) {
       memTracker.end({ success: false, reason: "diffbot_error", error: diffbotResult.error.message });
@@ -570,7 +570,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
       try {
         const metadata = await redis.get(metaKey);
         if (metadata && typeof metadata === "object") {
-          logger.info({ endpoint: "article/meta", hostname, source, cache_hit: true, duration_ms: Date.now() - start }, "Meta cache hit");
+          logger.debug({ endpoint: "article/meta", hostname, source, cache_hit: true, duration_ms: Date.now() - start }, "Meta cache hit");
           return { meta: metadata, source, status: "success" };
         }
       } catch (err) {
@@ -578,7 +578,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
       }
     }
     // No cached metadata — return 404 (NOT a full article fetch)
-    logger.info({ endpoint: "article/meta", hostname, cache_hit: false, duration_ms: Date.now() - start }, "Meta cache miss");
+    logger.debug({ endpoint: "article/meta", hostname, cache_hit: false, duration_ms: Date.now() - start }, "Meta cache miss");
     set.status = 404;
     return { error: "No cached metadata", status: "not_found" };
   },
@@ -865,7 +865,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         // Emit per-source classification events (all sources, for analytics)
         for (const result of results) {
           if (result.classification) {
-            logger.info({
+            logger.debug({
               source: result.source, hostname,
               classification: result.classification.outcome,
               confidence: result.classification.confidence,
@@ -957,7 +957,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         // Emit extraction_outcome tracking event (only when at least one source got classified)
         const hasClassification = Object.values(sourceMeta).some(m => m.classification != null);
         if (env.CLASSIFIER_ENABLED && hasClassification) {
-          logger.info({
+          logger.debug({
             hostname,
             winning_source: bestResult.source,
             winning_classification: bestResult.classification?.outcome || "unknown",

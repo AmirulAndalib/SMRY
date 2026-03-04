@@ -651,7 +651,7 @@ async function generateCombined(
   const totalDurationMs = results.reduce((sum, r) => sum + r.durationMs, 0);
   const cacheHits = results.filter((r) => r.fromCache).length;
 
-  logger.info(
+  logger.debug(
     {
       chunksTotal: chunks.length,
       cacheHits,
@@ -731,7 +731,7 @@ export const ttsRoutes = new Elysia()
       const articleKey = computeChunkKeySync(cleanedText, voiceId);
       const cachedArticle = articleCache.get(articleKey);
       if (cachedArticle) {
-        logger.info(
+        logger.debug(
           { userId: auth.userId, textLength: cleanedText.length, voice: voiceId },
           "TTS article cache hit — instant replay",
         );
@@ -757,7 +757,7 @@ export const ttsRoutes = new Elysia()
       if (ttsRedisCache) {
         const redisArticle = await ttsRedisCache.getArticle(articleKey);
         if (redisArticle) {
-          logger.info(
+          logger.debug(
             { userId: auth.userId, textLength: cleanedText.length, voice: voiceId },
             "TTS Redis article cache hit — cross-device replay",
           );
@@ -829,7 +829,7 @@ export const ttsRoutes = new Elysia()
 
       // Log memory snapshot before synthesis
       const memBefore = process.memoryUsage();
-      logger.info({
+      logger.debug({
         rss: Math.round(memBefore.rss / 1024 / 1024),
         heapUsed: Math.round(memBefore.heapUsed / 1024 / 1024),
         heapTotal: Math.round(memBefore.heapTotal / 1024 / 1024),
@@ -877,7 +877,7 @@ export const ttsRoutes = new Elysia()
         incrementTtsUsage(auth.userId, auth.isPremium, articleUrl, voiceId, clientIp).catch(() => {});
 
         const memAfter = process.memoryUsage();
-        logger.info({
+        logger.debug({
           audioMB: Math.round(audioBytes / 1024 / 1024 * 10) / 10,
           durationSec: Math.round(result.durationMs / 1000),
           cacheTag: cacheTag || "generated",
@@ -929,7 +929,7 @@ export const ttsRoutes = new Elysia()
         // piggyback on its promise instead of making duplicate Inworld API calls.
         const pending = pendingGenerations.get(articleKey);
         if (pending) {
-          logger.info(
+          logger.debug(
             { userId: auth.userId, voice: voiceId },
             "TTS dedup — joining in-flight generation",
           );
@@ -947,7 +947,7 @@ export const ttsRoutes = new Elysia()
         }
 
         try {
-          logger.info(
+          logger.debug(
             { userId: auth.userId, textLength: cleanedText.length, voice: voiceId, chunksTotal: chunks.length, articleUrl },
             "TTS synthesis started",
           );
@@ -974,7 +974,7 @@ export const ttsRoutes = new Elysia()
       }
 
       // All chunks cached — no concurrency slot needed
-      logger.info(
+      logger.debug(
         { userId: auth.userId, textLength: cleanedText.length, voice: voiceId, chunksTotal: chunks.length },
         "TTS chunk cache hit — replaying cached audio",
       );

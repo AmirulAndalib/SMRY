@@ -122,15 +122,17 @@ function logMemory(): void {
   const snapshot = getMemorySnapshot();
   const caches = getAllCacheStats();
 
-  // Log as structured JSON for easy parsing
-  console.log(
-    JSON.stringify({
-      level: "info",
-      message: "memory_snapshot",
-      ...snapshot,
-      ...caches,
-    })
-  );
+  // Only log snapshot when memory is concerning (heap growing or RSS high)
+  if (snapshot.heap_used_delta_mb > 20 || snapshot.rss_mb > 500) {
+    console.log(
+      JSON.stringify({
+        level: "info",
+        message: "memory_snapshot",
+        ...snapshot,
+        ...caches,
+      })
+    );
+  }
 
   // Warn if heap is growing significantly
   if (snapshot.heap_used_delta_mb > 50) {

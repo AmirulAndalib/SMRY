@@ -119,7 +119,7 @@ async function forwardImpressionToGravity(impUrl: string): Promise<{
     // Consume body to release connection resources
     await response.text().catch(() => {});
 
-    logger.info({ impUrl: impUrl.slice(-50), status: response.status }, "Impression forwarded to Gravity");
+    logger.debug({ impUrl: impUrl.slice(-50), status: response.status }, "Impression forwarded to Gravity");
     return { forwarded: true, statusCode: response.status };
   } catch (error) {
     clearTimeout(timeoutId);
@@ -248,7 +248,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
             userAgent: device?.ua,
           }).catch(() => {});
 
-          logger.info({
+          logger.debug({
             url,
             sessionId,
             titleLength: title?.length || 0,
@@ -268,9 +268,9 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
 
           if (zcOffers.length > 0) {
             zcAds = zcOffers.map(mapZeroClickOfferToAd);
-            logger.info({ url, zcCount: zcAds.length }, "Ad(s) received from ZeroClick");
+            logger.debug({ url, zcCount: zcAds.length }, "Ad(s) received from ZeroClick");
           } else {
-            logger.info({ url }, "No ads from ZeroClick");
+            logger.debug({ url }, "No ads from ZeroClick");
           }
         } catch (zcError) {
           logger.warn({ error: String(zcError) }, "ZeroClick primary fetch error");
@@ -278,7 +278,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
       }
 
       // Log ZeroClick response stats
-      logger.info({
+      logger.debug({
         url_host: hostname,
         zeroclick_ad_count: zcAds.length,
         gravity_disabled: !env.GRAVITY_API_KEY,
@@ -290,7 +290,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
 
       if (zcAds.length < TARGET_AD_COUNT && env.GRAVITY_API_KEY) {
         const remaining = TARGET_AD_COUNT - zcAds.length;
-        logger.info({ url, zcCount: zcAds.length, remaining }, "Trying Gravity for remaining slots");
+        logger.debug({ url, zcCount: zcAds.length, remaining }, "Trying Gravity for remaining slots");
 
         // Build conversation context for Gravity with rich metadata
         const metadataParts = [
@@ -368,7 +368,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
           let gravityAds: ContextAd[] = [];
 
           if (response.status === 204) {
-            logger.info({ url, status: 204 }, "No matching ad from Gravity");
+            logger.debug({ url, status: 204 }, "No matching ad from Gravity");
           } else if (!response.ok) {
             const errorBody = await response.text().catch(() => "");
             logger.warn({ url, status: response.status, error: errorBody }, "Gravity API error");
@@ -381,7 +381,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
                 title: ad.title?.slice(0, 50),
                 impUrl: ad.impUrl?.slice(-20),
               }));
-              logger.info({
+              logger.debug({
                 url,
                 adCount: rawAds.length,
                 uniqueBrands: [...new Set(rawAds.map(a => a.brandName))].length,
@@ -397,7 +397,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
 
           if (gravityAds.length > 0) {
             allAds = [...zcAds, ...gravityAds];
-            logger.info({ url, zcCount: zcAds.length, gravityCount: gravityAds.length, totalCount: allAds.length }, "Waterfall merged ads");
+            logger.debug({ url, zcCount: zcAds.length, gravityCount: gravityAds.length, totalCount: allAds.length }, "Waterfall merged ads");
           }
         } catch (fetchError) {
           clearTimeout(timeoutId);
@@ -414,7 +414,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
         const gravityCount = allAds.length - zcCount;
 
         // Log final waterfall result for revenue analysis
-        logger.info({
+        logger.debug({
           url_host: hostname,
           zeroclick_count: zcCount,
           gravity_count: gravityCount,

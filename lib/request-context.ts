@@ -137,9 +137,9 @@ export function createRequestContext(initial?: InitialContext): RequestContext {
     // - ERROR + degraded → WARN (service partially impaired)
     // - ERROR + unexpected → ERROR (bug, needs attention)
     if (outcome === "success") {
-      logger.info(event, "request completed");
+      logger.debug(event, "request completed");
     } else if (errorSeverity === "expected") {
-      logger.info(event, "request completed");
+      logger.debug(event, "request completed");
     } else if (errorSeverity === "degraded") {
       logger.warn(event, "request completed");
     } else {

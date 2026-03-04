@@ -100,7 +100,7 @@ export function logMemorySnapshot(context: string, extra?: Record<string, unknow
   const mem = getMemoryMb();
   const caches = getAllCacheStats();
 
-  logger.info({
+  logger.debug({
     context,
     ...mem,
     ...caches,
@@ -156,7 +156,7 @@ export function startMemoryTrack(name: string, metadata?: Record<string, unknown
 
       // Only log if significant
       if (Math.abs(heapDelta) >= DELTA_THRESHOLD_MB || Math.abs(rssDelta) >= DELTA_THRESHOLD_MB) {
-        logger.info({
+        logger.debug({
           op_id: opId,
           op_name: name,
           checkpoint: checkpointName,
@@ -213,7 +213,7 @@ export function startMemoryTrack(name: string, metadata?: Record<string, unknown
         if (heapDelta >= 20 || rssDelta >= 50) {
           logger.warn(logData, `memory_spike_operation: ${name} used ${rssDelta}MB RSS`);
         } else {
-          logger.info(logData, `memory_operation: ${name}`);
+          logger.debug(logData, `memory_operation: ${name}`);
         }
       }
     },
@@ -236,7 +236,7 @@ export function trackFetchResponse(
 
   // Only log large responses or slow fetches
   if (contentLength >= LARGE_RESPONSE_BYTES || duration >= OPERATION_TIME_THRESHOLD_MS) {
-    logger.info({
+    logger.debug({
       source,
       url_host: (() => { try { return new URL(url).hostname; } catch { return "unknown"; } })(),
       content_length_bytes: contentLength,
@@ -284,7 +284,7 @@ export function logLargeAllocation(
   if (estimatedBytes < LARGE_RESPONSE_BYTES) return;
 
   const mem = getMemoryMb();
-  logger.info({
+  logger.debug({
     context,
     estimated_bytes: estimatedBytes,
     estimated_mb: Math.round(estimatedBytes / 1024 / 1024 * 100) / 100,
@@ -307,7 +307,7 @@ export function startCacheStatsLogger(): void {
     const mem = getMemoryMb();
     const caches = getAllCacheStats();
 
-    logger.info({
+    logger.debug({
       ...mem,
       ...caches,
     }, "cache_stats_snapshot");

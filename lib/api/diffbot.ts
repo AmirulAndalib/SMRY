@@ -269,7 +269,7 @@ export function extractDateFromDom(doc: Document): string | undefined {
  * Extract article from HTML/DOM using Mozilla Readability
  */
 function extractWithReadability(html: string, url: string, debugContext: DebugContext): DiffbotArticle | null {
-  logger.info({ hostname: new URL(url).hostname, htmlLength: html.length }, 'Attempting Readability extraction on Diffbot DOM');
+  logger.debug({ hostname: new URL(url).hostname, htmlLength: html.length }, 'Attempting Readability extraction on Diffbot DOM');
   addDebugStep(debugContext, 'readability_fallback', 'info', 'Diffbot did not fully extract article, trying Readability on DOM', {
     domLength: html.length,
   });
@@ -330,7 +330,7 @@ function extractWithReadability(html: string, url: string, debugContext: DebugCo
 
           const validatedArticle = validationResult.data;
 
-          logger.info({
+          logger.debug({
             hostname: new URL(url).hostname,
             title: validatedArticle.title,
             textLength: validatedArticle.textContent.length,
@@ -391,7 +391,7 @@ function extractWithReadability(html: string, url: string, debugContext: DebugCo
 
       const validatedArticle = validationResult.data;
 
-      logger.info({
+      logger.debug({
         hostname: new URL(url).hostname,
         title: validatedArticle.title,
         textLength: validatedArticle.textContent.length,
@@ -447,7 +447,7 @@ function extractWithReadability(html: string, url: string, debugContext: DebugCo
 export function fetchArticleWithDiffbot(url: string, source: string = 'smry-slow', externalSignal?: AbortSignal): ResultAsync<DiffbotArticle, AppError> {
   const debugContext = createDebugContext(url, source);
 
-  logger.info({ hostname: new URL(url).hostname }, 'Attempting Diffbot article extraction');
+  logger.debug({ hostname: new URL(url).hostname }, 'Attempting Diffbot article extraction');
   addDebugStep(debugContext, 'init', 'info', 'Starting Diffbot extraction');
 
   return ResultAsync.fromPromise(
@@ -635,7 +635,7 @@ export function fetchArticleWithDiffbot(url: string, source: string = 'smry-slow
               // Don't return, let it fall through to Readability fallback
             } else {
               const validatedArticle = articleValidation.data;
-              logger.info({ title: validatedArticle.title, length: validatedArticle.text.length }, 'Diffbot successfully extracted article');
+              logger.debug({ title: validatedArticle.title, length: validatedArticle.text.length }, 'Diffbot successfully extracted article');
               addDebugStep(debugContext, 'diffbot_extraction', 'success', 'Diffbot extracted article successfully', {
                 extractedTitle: validatedArticle.title,
                 extractedTextLength: validatedArticle.text.length,
@@ -722,7 +722,7 @@ export function fetchArticleWithDiffbot(url: string, source: string = 'smry-slow
             // Don't resolve, let it fall through to check for DOM fallback
           } else {
             const validatedArticle = articleValidation.data;
-            logger.info({ title: validatedArticle.title, length: validatedArticle.text.length }, 'Diffbot successfully extracted article (old format)');
+            logger.debug({ title: validatedArticle.title, length: validatedArticle.text.length }, 'Diffbot successfully extracted article (old format)');
             addDebugStep(debugContext, 'diffbot_extraction', 'success', 'Diffbot extracted article (old format)', {
               extractedTitle: validatedArticle.title,
               extractedTextLength: validatedArticle.text.length,
@@ -755,7 +755,7 @@ export function fetchArticleWithDiffbot(url: string, source: string = 'smry-slow
 
         // Fallback to Readability if we have DOM
         if (domForFallback) {
-          logger.info({ hostname: new URL(url).hostname, domLength: domForFallback.length }, 'Using Readability fallback on DOM');
+          logger.debug({ hostname: new URL(url).hostname, domLength: domForFallback.length }, 'Using Readability fallback on DOM');
           addDebugStep(debugContext, 'readability_attempt', 'info', 'Attempting Readability extraction on DOM', {
             domLength: domForFallback.length,
           });
@@ -783,7 +783,7 @@ export function fetchArticleWithDiffbot(url: string, source: string = 'smry-slow
               });
             } else {
               const validatedResult = readabilityValidation.data;
-              logger.info({
+              logger.debug({
                 hostname: new URL(url).hostname,
                 title: validatedResult.title,
                 textLength: validatedResult.text.length,
