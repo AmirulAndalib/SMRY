@@ -9,6 +9,7 @@
  */
 
 import { env } from "../server/env";
+import  logger  from "./logger";
 
 const CLASSIFIER_URL = env.CLASSIFIER_URL || "http://localhost:8000";
 const CLASSIFIER_TIMEOUT_MS = 5000;
@@ -40,8 +41,9 @@ export async function classifyHtml(
     });
     if (!response.ok) return null;
     return (await response.json()) as ClassificationResult;
-  } catch {
-    return null; // Classifier unavailable — fall back to old logic
+  } catch (err) {
+    logger.warn({ err, classifierUrl: CLASSIFIER_URL }, "Classifier unavailable — falling back to heuristic");
+    return null;
   } finally {
     clearTimeout(timeout);
   }
