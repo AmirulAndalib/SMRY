@@ -29,7 +29,7 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
   const [copied, setCopied] = useState(false);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const lastSelectedTextRef = useRef("");
-  const { track, markFeatureUsed } = useAnalytics();
+  const { track } = useAnalytics();
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Debounced selection change handler
@@ -104,14 +104,13 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
         contextAfter,
       });
       track("highlight_created", { text_length: selection.text.length, color });
-      markFeatureUsed("highlights");
 
       window.getSelection()?.removeAllRanges();
       setSelection(null);
       setShowNoteInput(false);
       setNote("");
     },
-    [selection, note, onHighlight, track, markFeatureUsed]
+    [selection, note, onHighlight, track]
   );
 
   const handleCopy = useCallback(async () => {

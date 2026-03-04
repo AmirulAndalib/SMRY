@@ -13,7 +13,6 @@ import { getAuthInfo } from "../middleware/auth";
 import { env } from "../env";
 import { extractClientIp } from "../../lib/request-context";
 import { createLogger } from "../../lib/logger";
-import { trackAdEvent, type AdEventStatus } from "../../lib/posthog";
 import {
   fetchZeroClickOffers,
   mapZeroClickOfferToAd,
@@ -170,28 +169,6 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
       // (gravity_forwarded = did Gravity actually receive the pixel = did we get paid).
       // This data is not available client-side.
       if (gravityResult) {
-        try {
-          trackAdEvent({
-            event_type: type,
-            session_id: sessionId,
-            hostname,
-            brand_name: brandName,
-            click_url: clickUrl,
-            imp_url: impUrl,
-            device_type: deviceType,
-            os,
-            browser,
-            status: "filled",
-            gravity_forwarded: gravityResult.forwarded ? 1 : 0,
-            gravity_status_code: gravityResult.statusCode,
-            error_message: gravityResult.error ?? "",
-            placement: placement || "unknown",
-            ad_index: adIndex ?? -1,
-          });
-        } catch (error) {
-          logger.warn({ error: String(error), type }, "Failed to track Gravity billing event");
-        }
-
         logger.debug({
           type,
           hostname,
@@ -233,7 +210,6 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
   .post(
   "/context",
   async ({ body, request }) => {
-    const startTime = Date.now();
     const { title, url, articleContent, sessionId, device, user, byline, siteName, publishedTime, lang, prompt } = body;
     const hostname = (() => { try { return new URL(url).hostname; } catch { return "unknown"; } })();
     const memTracker = startMemoryTrack("ad-context-request", {
@@ -242,58 +218,12 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
       article_content_length: articleContent?.length || 0,
     });
 
-    // Helper to extract hostname from URL
-    const getHostname = (urlStr: string): string => {
-      try { return new URL(urlStr).hostname; } catch { return ""; }
-    };
 
-    // Helper to track ad event
-    const track = (status: AdEventStatus, extra: {
-      gravityStatus?: number;
-      errorMessage?: string;
-      brandName?: string;
-      adTitle?: string;
-      adText?: string;
-      clickUrl?: string;
-      impUrl?: string;
-      cta?: string;
-      favicon?: string;
-      userId?: string | null;
-      isPremium?: boolean;
-      adCount?: number;
-    } = {}) => {
-      trackAdEvent({
-        event_type: "request", // Server-side events are always "request" type
-        url,
-        hostname: getHostname(url),
-        article_title: title,
-        article_content_length: articleContent?.length || 0,
-        session_id: sessionId,
-        user_id: extra.userId ?? user?.id ?? "",
-        is_premium: extra.isPremium ? 1 : 0,
-        device_type: device?.deviceType ?? "",
-        os: device?.os ?? "",
-        browser: device?.browser ?? "",
-        status,
-        gravity_status_code: extra.gravityStatus ?? 0,
-        error_message: extra.errorMessage ?? "",
-        brand_name: extra.brandName ?? "",
-        ad_title: extra.adTitle ?? "",
-        ad_text: extra.adText ?? "",
-        click_url: extra.clickUrl ?? "",
-        imp_url: extra.impUrl ?? "",
-        cta: extra.cta ?? "",
-        favicon: extra.favicon ?? "",
-        ad_count: extra.adCount ?? 0,
-        duration_ms: Date.now() - startTime,
-      });
-    };
 
     try {
       // Check premium status
       const { isPremium, userId } = await getAuthInfo(request);
       if (isPremium) {
-        track("premium_user", { userId, isPremium: true });
         memTracker.end({ status: "premium_user" });
         return { status: "premium_user" as const };
       }
@@ -492,17 +422,6 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
           primary_provider: primaryAd.ad_provider ?? "zeroclick",
         }, "ad_waterfall_result");
 
-        track("filled", {
-          brandName: primaryAd.brandName,
-          adTitle: primaryAd.title,
-          adText: primaryAd.adText,
-          clickUrl: primaryAd.clickUrl,
-          impUrl: primaryAd.impUrl,
-          cta: primaryAd.cta,
-          favicon: primaryAd.favicon,
-          userId,
-          adCount: allAds.length,
-        });
         memTracker.end({ status: "filled", ad_count: allAds.length, zeroclick_count: zcCount, gravity_count: gravityCount });
         return {
           status: "filled" as const,
@@ -512,7 +431,6 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
       }
 
       // Nothing from either provider
-      track("no_fill", { userId });
       memTracker.end({ status: "no_fill" });
       return {
         status: "no_fill" as const,
@@ -520,7 +438,6 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
     } catch (error) {
       const errorMsg = String(error);
       logger.error({ error: errorMsg }, "Unexpected error in context route");
-      track("error", { errorMessage: errorMsg.slice(0, 200) });
       memTracker.end({ status: "error", error: errorMsg.slice(0, 100) });
       return {
         status: "error" as const,

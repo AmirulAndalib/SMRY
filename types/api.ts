@@ -88,6 +88,20 @@ export const ArticleAutoResponseSchema = z.object({
   // Flag indicating other sources may have longer content
   // Client should poll /article/enhanced after a few seconds
   mayHaveEnhanced: z.boolean().optional(),
+  // Classification metadata — used by client analytics to track extraction quality
+  classification: z.object({
+    outcome: z.string(),
+    confidence: z.number(),
+    selection_reason: z.string(),
+  }).optional(),
+  // Source reliability — which sources succeeded vs failed for this request
+  sources: z.object({
+    attempted: z.array(SourceSchema),
+    succeeded: z.array(SourceSchema),
+    failed: z.array(SourceSchema),
+  }).optional(),
+  // Total fetch time in ms (all sources combined) — for latency dashboards
+  fetch_ms: z.number().optional(),
 });
 export type ArticleAutoResponse = z.infer<typeof ArticleAutoResponseSchema>;
 

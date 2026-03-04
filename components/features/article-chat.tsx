@@ -152,7 +152,7 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
   const isLimitReached = !isPremium && usageData?.remaining === 0;
 
   const { language: preferredLanguage } = useChatLanguage();
-  const { track, markFeatureUsed } = useAnalytics();
+  const { track } = useAnalytics();
 
   const {
     messages,
@@ -183,11 +183,10 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
       await navigator.clipboard.writeText(text);
       setCopiedMessageId(messageId);
       setTimeout(() => setCopiedMessageId(null), 2000);
-      track("chat_message_copied", { message_length: text.length });
     } catch (err) {
       console.error("Failed to copy:", err);
     }
-  }, [track]);
+  }, []);
 
   const handleReload = useCallback(() => {
     reload();
@@ -200,19 +199,16 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
       setQuotedText(null);
       sendMessage(messageWithQuote);
       track("chat_message_sent", { message_length: messageWithQuote.length, language: preferredLanguage });
-      markFeatureUsed("chat");
       setInput("");
     } else {
       track("chat_message_sent", { message_length: input.trim().length, language: preferredLanguage });
-      markFeatureUsed("chat");
       handleSubmit();
     }
-  }, [quotedText, input, sendMessage, setInput, handleSubmit, track, markFeatureUsed, preferredLanguage]);
+  }, [quotedText, input, sendMessage, setInput, handleSubmit, track, preferredLanguage]);
 
   const handleSuggestionClick = useCallback((suggestion: string) => {
     sendMessage(suggestion);
-    track("chat_suggestion_clicked", { suggestion_text: suggestion });
-  }, [sendMessage, track]);
+  }, [sendMessage]);
 
   // Slash commands hook
   const {
@@ -415,7 +411,7 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
           <div className="flex items-center gap-1">
             {messages.length > 0 && (
               <button
-                onClick={() => { track("chat_cleared", { message_count: messages.length }); clearMessages(); }}
+                onClick={() => { clearMessages(); }}
                 className="flex size-9 items-center justify-center rounded-md text-muted-foreground/60 transition-colors hover:bg-muted/50 hover:text-muted-foreground active:bg-muted/70"
                 style={{ touchAction: "manipulation" }}
                 aria-label="Clear chat"
@@ -817,7 +813,7 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
             {variant === "sidebar" && messages.length > 0 && (
               <div className="flex items-center gap-0.5 mr-auto">
                 <button
-                  onClick={() => { track("chat_cleared", { message_count: messages.length }); clearMessages(); }}
+                  onClick={() => { clearMessages(); }}
                   className="flex size-6 items-center justify-center rounded text-muted-foreground/40 transition-colors hover:bg-muted/50 hover:text-muted-foreground"
                   aria-label="Clear chat"
                   title="Clear chat"

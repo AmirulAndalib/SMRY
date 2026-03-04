@@ -8,7 +8,6 @@
  * Railway's healthcheck on /health will detect the unhealthy status and restart.
  */
 
-import { trackEvent } from "./posthog";
 import { getAllCacheStats } from "./memory-tracker";
 
 const INTERVAL_MS = 30_000; // 30 seconds
@@ -118,21 +117,6 @@ function logMemory(): void {
       })
     );
 
-    // Log to PostHog for analysis
-    trackEvent({
-      request_id: `gc_${Date.now()}`,
-      endpoint: "/internal/gc",
-      path: "/internal/gc",
-      method: "INTERNAL",
-      outcome: gcResult.freedMb > 10 ? "success" : "error",
-      error_type: gcResult.freedMb <= 10 ? "GC_INEFFECTIVE" : "",
-      error_message: gcResult.freedMb <= 10 ? `GC only freed ${gcResult.freedMb}MB` : "",
-      error_severity: gcResult.freedMb <= 10 ? "degraded" : "",
-      duration_ms: gcResult.durationMs,
-      heap_used_mb: Math.round(process.memoryUsage().heapUsed / 1024 / 1024),
-      heap_total_mb: Math.round(process.memoryUsage().heapTotal / 1024 / 1024),
-      rss_mb: currentRss - gcResult.freedMb,
-    });
   }
 
   const snapshot = getMemorySnapshot();
@@ -175,20 +159,6 @@ function logMemory(): void {
       })
     );
 
-    // Log to PostHog for post-mortem analysis
-    trackEvent({
-      request_id: `memory_spike_${Date.now()}`,
-      endpoint: "/internal/memory",
-      path: "/internal/memory",
-      method: "INTERNAL",
-      outcome: "error",
-      error_type: "MEMORY_SPIKE",
-      error_message: `RSS spiked by ${snapshot.rss_delta_mb}MB in 30s (${snapshot.rss_mb - snapshot.rss_delta_mb}MB -> ${snapshot.rss_mb}MB)`,
-      error_severity: "unexpected",
-      heap_used_mb: snapshot.heap_used_mb,
-      heap_total_mb: snapshot.heap_total_mb,
-      rss_mb: snapshot.rss_mb,
-    });
   }
 
   // CRITICAL: Log when RSS exceeds threshold
@@ -208,20 +178,6 @@ function logMemory(): void {
       })
     );
 
-    // Log to PostHog for post-mortem analysis
-    trackEvent({
-      request_id: `memory_critical_${Date.now()}`,
-      endpoint: "/internal/memory",
-      path: "/internal/memory",
-      method: "INTERNAL",
-      outcome: "error",
-      error_type: "MEMORY_CRITICAL",
-      error_message: `RSS ${snapshot.rss_mb}MB exceeded threshold ${CRITICAL_RSS_MB}MB - healthcheck will trigger restart`,
-      error_severity: "unexpected",
-      heap_used_mb: snapshot.heap_used_mb,
-      heap_total_mb: snapshot.heap_total_mb,
-      rss_mb: snapshot.rss_mb,
-    });
   }
 }
 

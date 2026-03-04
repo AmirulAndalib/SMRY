@@ -23,7 +23,7 @@ export const env = createEnv({
     UPSTASH_REDIS_REST_URL: z.string().url(),
     UPSTASH_REDIS_REST_TOKEN: z.string().min(1),
 
-    // Analytics (PostHog) - optional, gracefully degrades when not set
+    // Analytics (PostHog) — not used server-side currently, kept for future use
     POSTHOG_API_KEY: z.string().optional(),
     POSTHOG_HOST: z.string().url().optional(),
 

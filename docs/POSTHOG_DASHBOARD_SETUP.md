@@ -1,76 +1,39 @@
 # PostHog Dashboard Setup Guide
 
-Complete step-by-step guide to set up your PostHog dashboard for SMRY.
-This replaces the `/admin` endpoint — everything you need is in PostHog.
+Step-by-step guide to create PostHog dashboards for SMRY.
 
-## Prerequisites
-
-Make sure these 6 env vars are set in Railway production:
-
-| Variable | Value | Where to find |
-|----------|-------|---------------|
-| `POSTHOG_API_KEY` | `phc_...` | Project Settings → Project API Key |
-| `POSTHOG_HOST` | `https://us.i.posthog.com` | Your PostHog instance URL |
-| `POSTHOG_PROJECT_ID` | numeric ID | Project Settings → Project ID |
-| `POSTHOG_PERSONAL_API_KEY` | `phx_...` | Avatar → Personal API Keys → Create with "Query Read" scope |
-| `NEXT_PUBLIC_POSTHOG_KEY` | same as `POSTHOG_API_KEY` | Same key, exposed to client |
-| `NEXT_PUBLIC_POSTHOG_HOST` | same as `POSTHOG_HOST` | Same host, exposed to client |
-
-After deploy, events appear within 30 seconds.
+**Current events:** 7 custom events + heatmaps (no $pageview — DataBuddy handles visitors).
 
 ---
 
 ## Dashboard 1: SMRY Overview (daily check)
 
-> Dashboards → New Dashboard → name: "SMRY Overview"
+> Dashboards -> New Dashboard -> name: "SMRY Overview"
 
-### Insight 1.1 — Daily Active Users (DAU)
+### 1.1 — Active Users
 
-1. **Insights → New Insight → Trends**
-2. Event: `$pageview`
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded`
 3. Aggregation: **Unique users**
 4. Date range: **Last 30 days**
 5. Display: **Line chart**
-6. Save as: **"DAU"**
+6. Save as: **"Active Users"**
 
-### Insight 1.2 — DAU/MAU Ratio (stickiness)
+Note: Visitor count and bounce rate are in DataBuddy. This tracks users who actually loaded an article.
 
-1. **Insights → New Insight → Stickiness**
-2. Event: `$pageview`
-3. Date range: **Last 30 days**
-4. This shows how many days per month users return
-5. Save as: **"User Stickiness"**
+### 1.2 — Error Rate
 
-### Insight 1.3 — New vs Returning Users
-
-1. **Insights → New Insight → Lifecycle**
-2. Event: `$pageview`
-3. Date range: **Last 30 days**
-4. Shows: New / Returning / Resurrecting / Dormant automatically
-5. Save as: **"User Lifecycle"**
-
-### Insight 1.4 — Total Requests (server health)
-
-1. **Insights → New Insight → Trends**
-2. Event: `request_event`
-3. Aggregation: **Total count**
+1. **Insights -> New Insight -> Trends**
+2. Event A: `article_loaded` -> rename: "Success"
+3. Event B: `article_error` -> rename: "Error"
 4. Date range: **Last 7 days**
 5. Display: **Line chart**
-6. Save as: **"Total Requests"**
+6. Save as: **"Success vs Error"**
 
-### Insight 1.5 — Success Rate
+### 1.3 — Premium vs Free
 
-1. **Insights → New Insight → Trends**
-2. Event A: `request_event` → Filter: `outcome = success` → rename: "Successful"
-3. Event B: `request_event` → rename: "Total"
-4. Click **Enable formula** → type: `A / B * 100`
-5. Date range: **Last 7 days**
-6. Save as: **"Success Rate %"**
-
-### Insight 1.6 — Premium vs Free Users
-
-1. **Insights → New Insight → Trends**
-2. Event: `$pageview`
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded`
 3. Aggregation: **Unique users**
 4. Breakdown by: `is_premium`
 5. Date range: **Last 30 days**
@@ -78,285 +41,221 @@ After deploy, events appear within 30 seconds.
 
 ---
 
-## Dashboard 2: Ad Revenue (your money dashboard)
+## Dashboard 2: Top Sites & Source Reliability
 
-> Dashboards → New Dashboard → name: "Ad Revenue"
+> Dashboards -> New Dashboard -> name: "Top Sites"
 
-### Insight 2.1 — Gravity Billing Health (MOST IMPORTANT)
+This tells you: "nytimes.com success rate is 95%, avg latency 2.3s, winning source is smry-fast."
 
-This tells you: did Gravity actually receive the impression pixel = did you get paid.
+### 2.1 — Top 10 Sites by Volume
 
-1. **Insights → New Insight → Trends**
-2. Event A: `ad_event` → Filter: `gravity_forwarded equals 1` → rename: "Billed (paid)"
-3. Event B: `ad_event` → Filter: `gravity_forwarded equals 0` → rename: "Failed (not paid)"
-4. Date range: **Last 7 days**
-5. Display: **Line chart**
-6. Save as: **"Gravity Billing Health"**
-
-**Set an alert**: Click the "..." menu on this insight → "Subscribe" → set alert if "Failed" exceeds 10% of "Billed". This warns you if revenue is dropping.
-
-### Insight 2.2 — Ad Impressions by Provider
-
-1. **Insights → New Insight → Trends**
-2. Event: `ad_impression`
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded`
 3. Aggregation: **Total count**
-4. Breakdown by: `ad_provider`
+4. Breakdown by: `hostname`
 5. Date range: **Last 7 days**
-6. Save as: **"Impressions by Provider"**
+6. Display: **Table**
+7. Save as: **"Top Sites"**
 
-### Insight 2.3 — Ad Clicks by Placement
+### 2.2 — Success Rate by Site
 
-1. **Insights → New Insight → Trends**
+1. **Insights -> New Insight -> Trends**
+2. Event A: `article_loaded` -> rename: "Success"
+3. Event B: `article_error` -> rename: "Error"
+4. Enable formula -> type: `A / (A + B) * 100`
+5. Breakdown by: `hostname`
+6. Date range: **Last 7 days**
+7. Display: **Table**
+8. Save as: **"Success Rate by Site"**
+
+### 2.3 — Average Latency by Site
+
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded`
+3. Aggregation: **Property value -> Average** -> property: `fetch_ms`
+4. Breakdown by: `hostname`
+5. Date range: **Last 7 days**
+6. Display: **Table**
+7. Save as: **"Avg Latency by Site"**
+
+### 2.4 — Winning Source by Site
+
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded`
+3. Aggregation: **Total count**
+4. Breakdown by: `hostname`, then add second breakdown: `source`
+5. Date range: **Last 7 days**
+6. Display: **Table**
+7. Save as: **"Source by Site"**
+
+### 2.5 — Winning Source Distribution (overall)
+
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded`
+3. Aggregation: **Total count**
+4. Breakdown by: `source`
+5. Date range: **Last 7 days**
+6. Display: **Pie chart**
+7. Save as: **"Winning Source"**
+
+### 2.6 — Which Sources Fail Most
+
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_loaded` -> Filter: `sources_failed contains smry-fast` -> rename: "smry-fast failures"
+3. Add series: `article_loaded` -> Filter: `sources_failed contains smry-slow` -> rename: "smry-slow failures"
+4. Add series: `article_loaded` -> Filter: `sources_failed contains wayback` -> rename: "wayback failures"
+5. Date range: **Last 7 days**
+6. Save as: **"Source Failures"**
+
+### 2.7 — Classifier Coverage
+
+1. **Insights -> New Insight -> Trends**
+2. Event A: `article_loaded` -> Filter: `classified equals true` -> rename: "Classified"
+3. Event B: `article_loaded` -> Filter: `classified equals false` -> rename: "Unclassified"
+4. Date range: **Last 7 days**
+5. Save as: **"Classifier Coverage"**
+
+---
+
+## Dashboard 3: Ad Clicks (placement optimization)
+
+> Dashboards -> New Dashboard -> name: "Ad Clicks"
+
+### 3.1 — Clicks by Placement
+
+1. **Insights -> New Insight -> Trends**
 2. Event: `ad_click`
 3. Aggregation: **Total count**
 4. Breakdown by: `placement`
 5. Date range: **Last 7 days**
 6. Save as: **"Clicks by Placement"**
 
-### Insight 2.4 — Click-Through Rate (CTR)
+This tells you which ad slots get clicked most. Optimize for the top placements.
 
-1. **Insights → New Insight → Trends**
-2. Event A: `ad_impression` → rename: "Impressions"
-3. Event B: `ad_click` → rename: "Clicks"
-4. Enable formula → type: `B / A * 100`
-5. Breakdown by: `placement`
-6. Date range: **Last 7 days**
-7. Save as: **"CTR by Placement"**
+### 3.2 — Clicks by Provider
 
-### Insight 2.5 — CTR by Device Type
-
-1. **Insights → New Insight → Trends**
-2. Event A: `ad_impression` → rename: "Impressions"
-3. Event B: `ad_click` → rename: "Clicks"
-4. Enable formula → type: `B / A * 100`
-5. Breakdown by: `device_type`
-6. Date range: **Last 7 days**
-7. Save as: **"CTR by Device"**
-
-### Insight 2.6 — Ad Fill Rate
-
-1. **Insights → New Insight → Trends**
-2. Event A: `ad_event` → Filter: `status equals filled` → rename: "Filled"
-3. Event B: `ad_event` → Filter: `status does not equal premium_user` → rename: "Eligible"
-4. Enable formula → type: `A / B * 100`
-5. Date range: **Last 7 days**
-6. Save as: **"Ad Fill Rate %"**
-
-### Insight 2.7 — Ad Funnel (request → fill → impression → click)
-
-1. **Insights → New Insight → Funnel**
-2. Step 1: `ad_event` → Filter: `event_type = request`
-3. Step 2: `ad_impression`
-4. Step 3: `ad_click`
-5. Funnel type: **Unordered** (user might not complete all steps in one session)
-6. Date range: **Last 7 days**
-7. Save as: **"Ad Funnel"**
-
----
-
-## Dashboard 3: Top Sites & Performance
-
-> Dashboards → New Dashboard → name: "Sites & Performance"
-
-### Insight 3.1 — Top 10 Sites by Volume
-
-1. **Insights → New Insight → Trends**
-2. Event: `request_event`
+1. **Insights -> New Insight -> Trends**
+2. Event: `ad_click`
 3. Aggregation: **Total count**
-4. Breakdown by: `hostname`
+4. Breakdown by: `ad_provider`
 5. Date range: **Last 7 days**
-6. Display: **Table** (click the chart type icon, pick Table)
-7. PostHog shows top hostnames sorted by volume
-8. Save as: **"Top Sites"**
+6. Save as: **"Clicks by Provider"**
 
-### Insight 3.2 — Success Rate by Site
+### 3.3 — Clicks by Device
 
-1. **Insights → New Insight → Trends**
-2. Event A: `request_event` → Filter: `outcome = success` → rename: "Success"
-3. Event B: `request_event` → rename: "Total"
-4. Enable formula → type: `A / B * 100`
-5. Breakdown by: `hostname`
-6. Display: **Table**
-7. Save as: **"Success Rate by Site"**
-
-### Insight 3.3 — Average Latency by Site
-
-1. **Insights → New Insight → Trends**
-2. Event: `request_event`
-3. Click aggregation dropdown (says "Total count") → **Property value → Average**
-4. Property: `duration_ms`
-5. Breakdown by: `hostname`
-6. Display: **Table**
-7. Save as: **"Avg Latency by Site"**
-
-### Insight 3.4 — P95 Latency by Site
-
-1. Same as 3.3 but pick **Property value → P95 (95th percentile)**
-2. Save as: **"P95 Latency by Site"**
-
-### Insight 3.5 — Cache Hit Rate
-
-1. **Insights → New Insight → Trends**
-2. Event A: `request_event` → Filter: `cache_hit equals 1` → rename: "Cache Hits"
-3. Event B: `request_event` → rename: "Total"
-4. Enable formula → type: `A / B * 100`
+1. **Insights -> New Insight -> Trends**
+2. Event: `ad_click`
+3. Aggregation: **Total count**
+4. Breakdown by: `device_type`
 5. Date range: **Last 7 days**
-6. Save as: **"Cache Hit Rate %"**
-
-### Insight 3.6 — Error Breakdown
-
-1. **Insights → New Insight → Trends**
-2. Event: `request_event` → Filter: `outcome = error`
-3. Breakdown by: `error_type`
-4. Date range: **Last 7 days**
-5. Display: **Table**
-6. Save as: **"Errors by Type"**
+6. Save as: **"Clicks by Device"**
 
 ---
 
 ## Dashboard 4: Feature Adoption
 
-> Dashboards → New Dashboard → name: "Feature Adoption"
+> Dashboards -> New Dashboard -> name: "Feature Adoption"
 
-### Insight 4.1 — Feature Usage
+### 4.1 — All Features Overview
 
-1. **Insights → New Insight → Trends**
-2. Event: `feature_used`
+1. **Insights -> New Insight -> Trends**
+2. Add these events (each as a separate series):
+   - `chat_message_sent` -> rename: "Chat"
+   - `article_shared` -> rename: "Share"
+   - `highlight_created` -> rename: "Highlights"
+   - `tts_requested` -> rename: "TTS"
 3. Aggregation: **Unique users**
-4. Breakdown by: `feature`
+4. Date range: **Last 30 days**
+5. Save as: **"Feature Usage (unique users)"**
+
+### 4.2 — Share Method Breakdown
+
+1. **Insights -> New Insight -> Trends**
+2. Event: `article_shared`
+3. Aggregation: **Total count**
+4. Breakdown by: `method`
 5. Date range: **Last 30 days**
-6. Save as: **"Feature Usage"**
+6. Save as: **"Share Methods"**
 
-### Insight 4.2 — Chat Engagement
+### 4.3 — Chat Engagement
 
-1. **Insights → New Insight → Trends**
-2. Event: `chat_message_sent`
-3. Aggregation: **Total count** (line A) + **Unique users** (line B — add same event again with unique users)
+1. **Insights -> New Insight -> Trends**
+2. Event A: `chat_message_sent` -> Aggregation: **Total count** -> rename: "Messages"
+3. Event B: `chat_message_sent` -> Aggregation: **Unique users** -> rename: "Users"
 4. Date range: **Last 30 days**
 5. Save as: **"Chat Engagement"**
 
-### Insight 4.3 — TTS Usage
+### 4.4 — TTS Usage by Voice
 
-1. **Insights → New Insight → Trends**
+1. **Insights -> New Insight -> Trends**
 2. Event: `tts_requested`
 3. Aggregation: **Unique users**
 4. Breakdown by: `voice`
 5. Date range: **Last 30 days**
-6. Save as: **"TTS Usage by Voice"**
-
-### Insight 4.4 — Article Sharing
-
-1. **Insights → New Insight → Trends**
-2. Event: `article_shared`
-3. Aggregation: **Total count**
-4. Date range: **Last 30 days**
-5. Save as: **"Articles Shared"**
-
-### Insight 4.5 — Highlights
-
-1. **Insights → New Insight → Trends**
-2. Event A: `highlight_created` → rename: "Created"
-3. Event B: `highlights_exported` → rename: "Exported"
-4. Aggregation: **Total count**
-5. Date range: **Last 30 days**
-6. Save as: **"Highlights"**
+6. Save as: **"TTS by Voice"**
 
 ---
 
-## Dashboard 5: LLM Analytics
+## Dashboard 5: Heatmaps
 
-> Go to **Product Analytics → LLM Analytics** (PostHog has a built-in dashboard for this)
+> Go to **Heatmaps** in the PostHog left sidebar (not a custom dashboard)
 
-PostHog auto-creates an LLM dashboard from `$ai_generation` events. It shows:
-- **Cost per model** (based on token counts)
-- **Latency distribution**
-- **Error rate**
-- **Token usage over time**
+PostHog heatmaps show:
+- **Click heatmaps** — where users click on each page
+- **Scroll depth** — how far down users scroll
+- **Rage clicks** — where users click repeatedly (frustration signal)
 
-If you want custom views:
-
-### Insight 5.1 — LLM Cost: Premium vs Free
-
-1. **Insights → New Insight → Trends**
-2. Event: `$ai_generation`
-3. Aggregation: **Property value → Sum** → property: `$ai_output_tokens`
-4. Breakdown by: `is_premium`
-5. Date range: **Last 30 days**
-6. Save as: **"LLM Tokens: Premium vs Free"**
-
-### Insight 5.2 — LLM Latency
-
-1. **Insights → New Insight → Trends**
-2. Event: `$ai_generation`
-3. Aggregation: **Property value → Average** → property: `$ai_latency`
-4. Date range: **Last 7 days**
-5. Save as: **"LLM Avg Latency"**
+Use this to:
+- Optimize ad placement (put ads where users look)
+- Find UI elements users try to click but can't
+- See if users scroll past important content
 
 ---
 
-## Alerts (set up immediately)
+## Dashboard 6: Retention
 
-Go to each insight → click "..." → **Subscribe / Alert**
+> Dashboards -> New Dashboard -> name: "Retention"
+
+### 6.1 — Weekly Retention
+
+1. **Insights -> New Insight -> Retention**
+2. Start event: `article_loaded` (first load)
+3. Return event: `article_loaded` (subsequent load)
+4. Period: **Weekly**
+5. Save as: **"Weekly Retention"**
+
+### 6.2 — Feature Retention
+
+1. **Insights -> New Insight -> Retention**
+2. Start event: `chat_message_sent`
+3. Return event: `chat_message_sent`
+4. Period: **Weekly**
+5. Save as: **"Chat Retention"**
+
+---
+
+## Alerts
+
+Go to each insight -> click "..." -> **Subscribe / Alert**
 
 | Alert | Condition | Why |
 |-------|-----------|-----|
-| Gravity billing failures | `gravity_forwarded = 0` count > 10% of total | Revenue loss |
-| Error rate spike | Success Rate % drops below 90% | Site broken |
-| Zero requests | Total Requests = 0 for 1 hour | Server down |
-| LLM errors | `$ai_generation` with `$ai_is_error = true` spikes | Chat broken |
-
----
-
-## Session Recordings (already enabled)
-
-Go to **Recordings** in the left sidebar. You can:
-- Watch real user sessions
-- Filter by: `is_premium`, `device_type`, specific events
-- See where users rage-click or get stuck
-- Debug ad visibility issues
-
-## Heatmaps (already enabled)
-
-Go to **Heatmaps** in the left sidebar. Shows:
-- Click heatmaps on any page
-- Scroll depth
-- Useful for optimizing ad placement
-
----
-
-## Sharing with Your Boss
-
-1. Open any dashboard
-2. Click **Share** (top right)
-3. Toggle **Share publicly**
-4. Copy the link — anyone with the link can view (read-only, no login needed)
-5. Or: **Export → PDF** for reports
+| Error spike | `article_error` count > 20% of `article_loaded` | Something is broken |
+| Source degradation | `sources_succeeded` average drops below 1.5 | Multiple sources failing |
+| Latency spike | `fetch_ms` average > 10000 | Performance issue |
 
 ---
 
 ## Quick Reference: All Events
 
-### Server-side events (lib/posthog.ts)
-| Event | When | Key properties |
+| Event | When | Key Properties |
 |-------|------|----------------|
-| `request_event` | Every article request | `hostname`, `outcome`, `duration_ms`, `cache_hit`, `error_type`, `source` |
-| `ad_event` | Gravity billing only | `gravity_forwarded`, `gravity_status_code`, `placement`, `status` |
-| `$ai_generation` | Every chat message | `$ai_model`, `$ai_input_tokens`, `$ai_output_tokens`, `$ai_latency`, `is_premium` |
-
-### Client-side events (posthog-js via use-analytics.ts)
-| Event | When | Key properties |
-|-------|------|----------------|
-| `$pageview` | Every page navigation | `$current_url` (automatic) |
-| `article_submitted` | User pastes URL | `url` |
-| `article_loaded` | Article renders | `hostname`, `source`, `article_title` |
-| `article_error` | Fetch fails | `error_name` |
-| `ad_impression` | Ad becomes visible | `placement`, `ad_provider` |
-| `ad_click` | User clicks ad | `placement`, `ad_provider` |
-| `ad_loaded` | Ads fetched | `ad_count`, `providers` |
-| `chat_message_sent` | Chat message | (auto-enriched) |
+| `article_loaded` | Article renders | `source`, `hostname`, `fetch_ms`, `classified`, `sources_succeeded`, `sources_failed` |
+| `article_error` | All sources fail | `error_name`, `hostname` |
+| `ad_click` | Ad clicked | `placement`, `ad_provider` |
+| `chat_message_sent` | Chat message | `message_length`, `language` |
+| `article_shared` | Share action | `method` (copy_link/native/x_twitter/linkedin/reddit) |
+| `highlight_created` | Text highlighted | `text_length`, `color` |
 | `tts_requested` | TTS loaded | `voice`, `article_url` |
-| `tts_played` / `tts_paused` | Playback toggle | `voice`, `playback_position` |
-| `article_shared` | Share button | `method` |
-| `highlight_created` | Text highlighted | (auto-enriched) |
-| `feature_used` | Any feature first use | `feature`, `$set_once: first_used_*` |
-| `setting_changed` | Settings toggle | `setting`, `value` |
+
+All events are auto-enriched with: `is_premium`, `device_type`, `locale`.

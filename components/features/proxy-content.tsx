@@ -622,7 +622,6 @@ function TTSControls({ onClose, voice, onVoiceChange, isPremium, usageCount = 0,
                             setShowVoice(false);
                             return;
                           }
-                          track("tts_voice_changed", { from_voice: voice, to_voice: v.id });
                           onVoiceChange(v.id);
                           setShowVoice(false);
                         }}
@@ -685,10 +684,6 @@ function TTSControls({ onClose, voice, onVoiceChange, isPremium, usageCount = 0,
           aria-label={isPlaying ? "Pause audio" : "Play audio"}
           className="size-12 active:scale-95 transition-transform duration-100 cursor-pointer"
           onClick={() => {
-            track(isPlaying ? "tts_paused" : "tts_played", {
-              playback_position: currentTime,
-              voice,
-            });
             toggle();
           }}
         >
@@ -1156,7 +1151,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
   const articleQuery = useArticleAuto(url);
   const { isPremium } = useIsPremium();
   const isDesktop = useIsDesktop();
-  const { track, trackArticle, markFeatureUsed } = useAnalytics();
+  const { track, trackArticle } = useAnalytics();
   const showDesktopPromo = isDesktop !== false;
   const showMobilePromo = isDesktop === false;
 
@@ -1233,9 +1228,9 @@ export function ProxyContent({ url }: ProxyContentProps) {
   const mobileChatAd = chatAd ?? inlineAd ?? footerAd ?? null;
 
   // Stable ad callbacks for ArticleContent (prevents breaking its React.memo on sidebar toggle)
-  const onInlineAdVisible = useCallback(() => { if (inlineAd) { fireImpression(inlineAd, "inline", 1); track("ad_impression", { placement: "inline", ad_provider: inlineAd.ad_provider }); } }, [inlineAd, fireImpression, track]);
+  const onInlineAdVisible = useCallback(() => { if (inlineAd) { fireImpression(inlineAd, "inline", 1); } }, [inlineAd, fireImpression]);
   const onInlineAdClick = useCallback(() => { if (inlineAd) { fireClick(inlineAd, "inline", 1); track("ad_click", { placement: "inline", ad_provider: inlineAd.ad_provider }); } }, [inlineAd, fireClick, track]);
-  const onFooterAdVisible = useCallback(() => { if (footerAd) { fireImpression(footerAd, "footer", 2); track("ad_impression", { placement: "footer", ad_provider: footerAd.ad_provider }); } }, [footerAd, fireImpression, track]);
+  const onFooterAdVisible = useCallback(() => { if (footerAd) { fireImpression(footerAd, "footer", 2); } }, [footerAd, fireImpression]);
   const onFooterAdClick = useCallback(() => { if (footerAd) { fireClick(footerAd, "footer", 2); track("ad_click", { placement: "footer", ad_provider: footerAd.ad_provider }); } }, [footerAd, fireClick, track]);
 
   // Debug: Log only when ads actually change
@@ -1247,13 +1242,8 @@ export function ProxyContent({ url }: ProxyContentProps) {
       const providers = [...new Set(gravityAds.map(a => a.ad_provider || 'gravity'))];
       console.log(`[Ads] New rotation (${providers.join(' + ')}):`,
         gravityAds.map((a, i) => `[${i}] ${a.brandName}`).join(', '));
-      track("ad_loaded", {
-        ad_count: gravityAds.length,
-        brand_names: gravityAds.map(a => a.brandName),
-        providers,
-      });
     }
-  }, [gravityAds, track]);
+  }, [gravityAds]);
 
   // Handle article load: save to history + track
   useEffect(() => {
@@ -1264,12 +1254,21 @@ export function ProxyContent({ url }: ProxyContentProps) {
     // Save to history
     addArticleToHistory(url, firstSuccessfulArticle.title || "Untitled Article");
 
-    // Track article load
+    // Track article load with classification + source reliability metadata
+    const cls = articleQuery.data?.classification;
+    const src = articleQuery.data?.sources;
     trackArticle("article_loaded", url, {
       source,
       article_title: firstSuccessfulArticle.title,
+      classified: !!cls,
+      classification_outcome: cls?.outcome,
+      classification_confidence: cls?.confidence,
+      selection_reason: cls?.selection_reason,
+      sources_succeeded: src?.succeeded?.length ?? 0,
+      sources_failed: src?.failed ?? [],
+      fetch_ms: articleQuery.data?.fetch_ms,
     });
-  }, [firstSuccessfulArticle, url, source, trackArticle]);
+  }, [firstSuccessfulArticle, url, source, trackArticle, articleQuery.data?.classification, articleQuery.data?.sources, articleQuery.data?.fetch_ms]);
 
   // Track article fetch errors
   useEffect(() => {
@@ -1295,9 +1294,8 @@ export function ProxyContent({ url }: ProxyContentProps) {
       setTTSOpen(true);
       t.load();
       track("tts_requested", { voice: t.voice, article_url: url });
-      markFeatureUsed("tts");
     }
-  }, [track, markFeatureUsed, url]);
+  }, [track, url]);
 
   const handleTTSClose = React.useCallback(() => {
     ttsRef.current.stop();
@@ -1322,10 +1320,9 @@ export function ProxyContent({ url }: ProxyContentProps) {
   const setSettingsOpen = React.useCallback((val: boolean | ((prev: boolean) => boolean)) => {
     setSettingsOpenRaw((prev) => {
       const next = typeof val === "function" ? val(prev) : val;
-      if (next && !prev) track("settings_opened");
       return next;
     });
-  }, [track]);
+  }, []);
   const [styleOptionsOpen, setStyleOptionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [sidebarActiveTab, setSidebarActiveTab] = useState<"chat" | "history">("chat");
@@ -1391,9 +1388,8 @@ export function ProxyContent({ url }: ProxyContentProps) {
   const handleViewModeChange = React.useCallback(
     (mode: (typeof viewModes)[number]) => {
       setQuery({ view: mode });
-      track("setting_changed", { setting: "view_mode", value: mode });
     },
-    [setQuery, track]
+    [setQuery]
   );
 
   const handleSidebarChange = React.useCallback(
@@ -1402,10 +1398,9 @@ export function ProxyContent({ url }: ProxyContentProps) {
       // Close annotations sidebar when opening chat sidebar
       if (next) {
         setAnnotationsSidebarOpen(false);
-        try { track("chat_opened", { hostname: new URL(url).hostname }); markFeatureUsed("chat"); } catch { /* ignore */ }
       }
     },
-    [setQuery, setAnnotationsSidebarOpen, track, markFeatureUsed, url]
+    [setQuery, setAnnotationsSidebarOpen]
   );
 
   // Copy page as markdown (used by ⌘C keyboard shortcut)
@@ -2050,7 +2045,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                   <div className="fixed bottom-4 right-4 z-40 w-[280px] lg:w-[320px] xl:w-[360px] max-w-[calc(100vw-2rem)]">
                     <GravityAd
                       ad={sidebarAd}
-                      onVisible={() => { fireImpression(sidebarAd, "sidebar", 0); track("ad_impression", { placement: "sidebar", ad_provider: sidebarAd.ad_provider }); }}
+                      onVisible={() => { fireImpression(sidebarAd, "sidebar", 0); }}
                       onClick={() => { fireClick(sidebarAd, "sidebar", 0); track("ad_click", { placement: "sidebar", ad_provider: sidebarAd.ad_provider }); }}
                       onDismiss={() => {
                         fireDismiss(sidebarAd, "sidebar", 0);
@@ -2116,13 +2111,13 @@ export function ProxyContent({ url }: ProxyContentProps) {
                       onMessagesChange={isPremium ? handleMessagesChange : undefined}
                       activeThreadTitle={_activeThread?.title}
                       headerAd={!isPremium ? chatAd : null}
-                      onHeaderAdVisible={chatAd ? () => { fireImpression(chatAd, "chat_header", 3); track("ad_impression", { placement: "chat_header", ad_provider: chatAd.ad_provider }); } : undefined}
+                      onHeaderAdVisible={chatAd ? () => { fireImpression(chatAd, "chat_header", 3); } : undefined}
                       onHeaderAdClick={chatAd ? () => { fireClick(chatAd, "chat_header", 3); track("ad_click", { placement: "chat_header", ad_provider: chatAd.ad_provider }); } : undefined}
                       ad={!isPremium ? (inlineAd ?? footerAd) : null}
-                      onAdVisible={inlineAd ? () => { fireImpression(inlineAd, "chat_inline", 1); track("ad_impression", { placement: "chat_inline", ad_provider: inlineAd.ad_provider }); } : footerAd ? () => { fireImpression(footerAd, "chat_inline", 2); track("ad_impression", { placement: "chat_inline", ad_provider: footerAd.ad_provider }); } : undefined}
+                      onAdVisible={inlineAd ? () => { fireImpression(inlineAd, "chat_inline", 1); } : footerAd ? () => { fireImpression(footerAd, "chat_inline", 2); } : undefined}
                       onAdClick={inlineAd ? () => { fireClick(inlineAd, "chat_inline", 1); track("ad_click", { placement: "chat_inline", ad_provider: inlineAd.ad_provider }); } : footerAd ? () => { fireClick(footerAd, "chat_inline", 2); track("ad_click", { placement: "chat_inline", ad_provider: footerAd.ad_provider }); } : undefined}
                       microAd={!isPremium ? microAd : null}
-                      onMicroAdVisible={microAd ? () => { fireImpression(microAd, "micro", 4); track("ad_impression", { placement: "micro", ad_provider: microAd.ad_provider }); } : undefined}
+                      onMicroAdVisible={microAd ? () => { fireImpression(microAd, "micro", 4); } : undefined}
                       onMicroAdClick={microAd ? () => { fireClick(microAd, "micro", 4); track("ad_click", { placement: "micro", ad_provider: microAd.ad_provider }); } : undefined}
                       threads={threads}
                       activeThreadId={currentThreadId}
@@ -2257,10 +2252,10 @@ export function ProxyContent({ url }: ProxyContentProps) {
                 articleContent={articleTextContent || ""}
                 articleTitle={articleTitle}
                 chatAd={!isPremium ? mobileChatAd : null}
-                onChatAdVisible={mobileChatAd ? () => { fireImpression(mobileChatAd, "mobile_chat_header", gravityAds.indexOf(mobileChatAd)); track("ad_impression", { placement: "mobile_chat_header", ad_provider: mobileChatAd.ad_provider }); } : undefined}
+                onChatAdVisible={mobileChatAd ? () => { fireImpression(mobileChatAd, "mobile_chat_header", gravityAds.indexOf(mobileChatAd)); } : undefined}
                 onChatAdClick={mobileChatAd ? () => { fireClick(mobileChatAd, "mobile_chat_header", gravityAds.indexOf(mobileChatAd)); track("ad_click", { placement: "mobile_chat_header", ad_provider: mobileChatAd.ad_provider }); } : undefined}
                 inlineChatAd={!isPremium ? (inlineAd ?? footerAd) : null}
-                onInlineChatAdVisible={inlineAd ? () => { fireImpression(inlineAd, "mobile_chat_inline", 1); track("ad_impression", { placement: "mobile_chat_inline", ad_provider: inlineAd.ad_provider }); } : footerAd ? () => { fireImpression(footerAd, "mobile_chat_inline", 2); track("ad_impression", { placement: "mobile_chat_inline", ad_provider: footerAd.ad_provider }); } : undefined}
+                onInlineChatAdVisible={inlineAd ? () => { fireImpression(inlineAd, "mobile_chat_inline", 1); } : footerAd ? () => { fireImpression(footerAd, "mobile_chat_inline", 2); } : undefined}
                 onInlineChatAdClick={inlineAd ? () => { fireClick(inlineAd, "mobile_chat_inline", 1); track("ad_click", { placement: "mobile_chat_inline", ad_provider: inlineAd.ad_provider }); } : footerAd ? () => { fireClick(footerAd, "mobile_chat_inline", 2); track("ad_click", { placement: "mobile_chat_inline", ad_provider: footerAd.ad_provider }); } : undefined}
                 isPremium={isPremium}
                 initialMessages={threadInitialMessages}
@@ -2296,7 +2291,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                   <GravityAd
                     ad={sidebarAd}
                     variant="mobile"
-                    onVisible={() => { fireImpression(sidebarAd, "mobile_bottom", 0); track("ad_impression", { placement: "mobile_bottom", ad_provider: sidebarAd.ad_provider }); }}
+                    onVisible={() => { fireImpression(sidebarAd, "mobile_bottom", 0); }}
                     onClick={() => { fireClick(sidebarAd, "mobile_bottom", 0); track("ad_click", { placement: "mobile_bottom", ad_provider: sidebarAd.ad_provider }); }}
                     onDismiss={() => {
                       fireDismiss(sidebarAd, "mobile_bottom", 0);

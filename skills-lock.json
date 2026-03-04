@@ -1,0 +1,10 @@
+{
+  "version": 1,
+  "skills": {
+    "posthog-analytics": {
+      "source": "alinaqi/claude-bootstrap",
+      "sourceType": "github",
+      "computedHash": "c24d809a776c957dcede63315c8a719433b12f412fb91b3f37f971c97ee0de2e"
+    }
+  }
+}

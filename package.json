@@ -82,7 +82,6 @@
     "nuqs": "^2.8.0",
     "pino": "^8.19.0",
     "posthog-js": "^1.341.1",
-    "posthog-node": "^5.24.10",
     "react": "19.2.1",
     "react-dom": "19.2.1",
     "react-markdown": "^10.1.0",

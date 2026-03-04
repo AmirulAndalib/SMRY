@@ -20,7 +20,6 @@ import { abuseRateLimiter } from "../../lib/rate-limit-memory";
 import { startMemoryTrack, trackFetchResponse, logLargeAllocation } from "../../lib/memory-tracker";
 import { acquireFetchSlot, releaseFetchSlot, FetchSlotTimeoutError } from "../../lib/article-concurrency";
 import { classifyHtml, type ClassificationResult } from "../../lib/classifier-client";
-import { trackClassificationEvent, trackExtractionOutcome } from "../../lib/posthog";
 import { env } from "../env";
 
 const logger = createLogger("api:article");
@@ -874,16 +873,6 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
               latency_us: result.classification.latency_us,
               article_length: result.article.length,
             }, `Classifier: ${result.source} → ${result.classification.outcome}`);
-            trackClassificationEvent({
-              url, hostname,
-              source: result.source,
-              request_id: ctx.requestId,
-              classification: result.classification.outcome,
-              classification_confidence: result.classification.confidence,
-              classification_method: result.classification.method,
-              classification_latency_us: result.classification.latency_us,
-              article_length: result.article.length,
-            });
           }
         }
 
@@ -919,6 +908,11 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
 
         // --- SELECT: cache only the winner ---
         cacheResult(bestResult);
+
+        // Track which sources succeeded vs failed (before releasing loser articles)
+        const sourcesAttempted: ("smry-fast" | "wayback" | "smry-slow")[] = ["smry-fast", "wayback", "smry-slow"];
+        const sourcesSucceeded = results.map(r => r.source);
+        const sourcesFailed = sourcesAttempted.filter(s => !sourcesSucceeded.includes(s));
 
         // Build lightweight per-source metadata for PostHog (before releasing loser articles)
         const sourceMeta: Record<string, {
@@ -974,22 +968,6 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
             total_fetch_ms: totalFetchMs,
           }, `Extraction outcome: ${bestResult.source} won (tier=${bestResult.classification?.outcome || "no_classifier"}, len=${bestResult.article.length})`);
 
-          trackExtractionOutcome({
-            url,
-            hostname,
-            request_id: ctx.requestId,
-            winning_source: bestResult.source,
-            winning_classification: bestResult.classification?.outcome || "unknown",
-            winning_confidence: bestResult.classification?.confidence || 0,
-            selection_reason: selectionReason,
-            smry_fast_classification: sourceMeta["smry-fast"]?.classification || null,
-            smry_fast_length: sourceMeta["smry-fast"]?.length || 0,
-            smry_slow_classification: sourceMeta["smry-slow"]?.classification || null,
-            smry_slow_length: sourceMeta["smry-slow"]?.length || 0,
-            wayback_classification: sourceMeta["wayback"]?.classification || null,
-            wayback_length: sourceMeta["wayback"]?.length || 0,
-            total_fetch_ms: totalFetchMs,
-          });
         }
 
         // Return the best result
@@ -1007,6 +985,20 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
           article: buildArticleResponse(bestResult.article),
           status: "success",
           mayHaveEnhanced: false, // All sources already evaluated by classifier
+          // Lightweight classification metadata for client analytics
+          ...(bestResult.classification && {
+            classification: {
+              outcome: bestResult.classification.outcome,
+              confidence: bestResult.classification.confidence,
+              selection_reason: selectionReason,
+            },
+          }),
+          sources: {
+            attempted: sourcesAttempted,
+            succeeded: sourcesSucceeded,
+            failed: sourcesFailed,
+          },
+          fetch_ms: totalFetchMs,
         };
       } finally {
         releaseFetchSlot();

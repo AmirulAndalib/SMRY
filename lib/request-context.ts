@@ -1,6 +1,6 @@
 import { createLogger } from "./logger";
 import { randomUUID } from "crypto";
-import { trackEvent, ErrorSeverity } from "./posthog";
+import type { ErrorSeverity } from "./posthog";
 import { env } from "../server/env";
 
 /**
@@ -146,46 +146,6 @@ export function createRequestContext(initial?: InitialContext): RequestContext {
       logger.error(event, "request completed");
     }
 
-    // Send to PostHog analytics (fire-and-forget, non-blocking)
-    trackEvent({
-      request_id: event.request_id as string,
-      timestamp: event.timestamp as string,
-      method: (event.method as string) || "",
-      endpoint: (event.endpoint as string) || "",
-      path: (event.path as string) || "",
-      url: (event.url as string) || "",
-      hostname: (event.hostname as string) || "",
-      source: (event.source as string) || "",
-      outcome: event.outcome as string,
-      status_code: (event.status_code as number) || 0,
-      error_type: (event.error_type as string) || "",
-      error_message: (event.error_message as string) || "",
-      error_severity: (event.error_severity as ErrorSeverity) || "",
-      // Upstream error info - which host/service actually caused the error
-      upstream_hostname: (event.upstream_hostname as string) || "",
-      upstream_status_code: (event.upstream_status_code as number) || 0,
-      upstream_error_code: (event.upstream_error_code as string) || "",
-      upstream_message: (event.upstream_message as string) || "",
-      duration_ms: event.duration_ms as number,
-      fetch_ms: (event.fetch_ms as number) || 0,
-      cache_lookup_ms: (event.cache_lookup_ms as number) || 0,
-      cache_save_ms: (event.cache_save_ms as number) || 0,
-      cache_hit: event.cache_hit ? 1 : 0,
-      cache_status: (event.cache_status as string) || "",
-      article_length: (event.article_length as number) || 0,
-      article_title: (event.article_title as string) || "",
-      summary_length: (event.summary_length as number) || 0,
-      input_tokens: (event.input_tokens as number) || 0,
-      output_tokens: (event.output_tokens as number) || 0,
-      is_premium: event.is_premium ? 1 : 0,
-      client_ip: (event.ip as string) || "",
-      user_agent: (event.userAgent as string) || "",
-      heap_used_mb: event.heap_used_mb as number,
-      heap_total_mb: event.heap_total_mb as number,
-      rss_mb: event.rss_mb as number,
-      env: (event.env as string) || "",
-      version: (event.version as string) || "",
-    });
   };
 
   const success = (extra?: Record<string, unknown>) => {

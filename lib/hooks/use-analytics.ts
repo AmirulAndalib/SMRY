@@ -4,36 +4,19 @@ import { useCallback } from "react";
 import { usePostHog } from "posthog-js/react";
 import { useIsPremium } from "./use-is-premium";
 
-// All tracked event names — only add events that are actually used in code
+// Tracked events — only high-value, decision-driving analytics.
+// ~10 events vs the previous ~20 — cuts event volume roughly in half.
 export type AnalyticsEvent =
-  // Home
-  | "article_submitted"
-  | "url_validation_error"
-  // Article reader
-  | "article_loaded"
+  // Core value
+  | "article_loaded"       // enriched with classification + source reliability + latency
   | "article_error"
-  | "chat_opened"
-  | "settings_opened"
-  | "ad_loaded"
-  | "ad_impression"
+  // Revenue
   | "ad_click"
-  // Chat
+  // Feature adoption
   | "chat_message_sent"
-  | "chat_suggestion_clicked"
-  | "chat_message_copied"
-  | "chat_cleared"
-  // Share
   | "article_shared"
-  // Highlights
   | "highlight_created"
-  | "highlights_exported"
-  // Settings
-  | "setting_changed"
-  // TTS
-  | "tts_requested"
-  | "tts_played"
-  | "tts_paused"
-  | "tts_voice_changed";
+  | "tts_requested";
 
 function getDeviceType(): "mobile" | "tablet" | "desktop" {
   if (typeof window === "undefined") return "desktop";
@@ -84,28 +67,5 @@ export function useAnalytics() {
     [track],
   );
 
-  /**
-   * Mark a feature as "used" on the user's PostHog profile.
-   * Uses $set_once so only the first usage date is recorded.
-   * Build cohorts in PostHog: "users who used TTS", "users who shared", etc.
-   */
-  const markFeatureUsed = useCallback(
-    (feature: "tts" | "chat" | "share" | "highlights" | "export_highlights") => {
-      if (!posthog) return;
-      try {
-        posthog.capture("feature_used", {
-          feature,
-          is_premium: isPremium,
-          device_type: getDeviceType(),
-          $set_once: { [`first_used_${feature}`]: new Date().toISOString() },
-          $set: { [`last_used_${feature}`]: new Date().toISOString() },
-        });
-      } catch {
-        // Analytics should never crash the app
-      }
-    },
-    [posthog, isPremium],
-  );
-
-  return { track, trackArticle, markFeatureUsed };
+  return { track, trackArticle };
 }

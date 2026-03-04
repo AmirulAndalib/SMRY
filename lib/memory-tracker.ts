@@ -18,7 +18,6 @@
 
 import { createLogger } from "./logger";
 import { getZeroClickCacheStats } from "./zeroclick";
-import { getBufferStats } from "./posthog";
 import { abuseRateLimiter } from "./rate-limit-memory";
 import { getFetchSlotStats } from "./article-concurrency";
 
@@ -73,8 +72,6 @@ function getMemoryMb(): { heapUsed: number; rss: number; external: number; array
 export function getAllCacheStats(): Record<string, unknown> {
   try {
     const zeroClick = getZeroClickCacheStats();
-    const posthogBuffer = getBufferStats();
-
     const fetchSlots = getFetchSlotStats();
 
     return {
@@ -83,9 +80,6 @@ export function getAllCacheStats(): Record<string, unknown> {
       zeroclick_orphaned: zeroClick.orphanedCount,
       zeroclick_total_created: zeroClick.totalCreated,
       zeroclick_total_closed: zeroClick.totalClosed,
-      posthog_buffer: posthogBuffer.size,
-      posthog_active_queries: posthogBuffer.activeQueries,
-      posthog_queued_queries: posthogBuffer.queuedQueries,
       rate_limiter_ips: abuseRateLimiter.size,
       active_operations: activeOperations.size,
       article_active_fetches: fetchSlots.activeFetches,

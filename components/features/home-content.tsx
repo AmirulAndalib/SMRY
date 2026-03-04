@@ -415,9 +415,6 @@ export const HomeContent = memo(function HomeContent() {
     try {
       const parsed = urlSchema.parse({ url });
       setUrlError(null);
-      try {
-        track("article_submitted", { hostname: new URL(parsed.url).hostname, article_url: parsed.url });
-      } catch { /* ignore tracking errors */ }
       router.push(`/proxy?url=${encodeURIComponent(parsed.url)}`);
     } catch (error) {
       const message =
@@ -425,7 +422,6 @@ export const HomeContent = memo(function HomeContent() {
           ? error.issues[0]?.message ?? t("validationError")
           : t("validationError");
       setUrlError(message);
-      track("url_validation_error", { error_message: message });
     }
   };
 
@@ -527,7 +523,7 @@ export const HomeContent = memo(function HomeContent() {
               <GravityAd
                 ad={ad}
                 variant="home"
-                onVisible={() => { fireImpression(ad, "home", 0); track("ad_impression", { placement: "home", ad_provider: ad.ad_provider }); }}
+                onVisible={() => { fireImpression(ad, "home", 0); }}
                 onClick={() => { fireClick(ad, "home", 0); track("ad_click", { placement: "home", ad_provider: ad.ad_provider }); }}
               />
             </div>

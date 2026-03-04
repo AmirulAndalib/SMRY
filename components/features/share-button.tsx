@@ -76,7 +76,7 @@ const ShareModalContent = React.memo(function ShareModalContent({
 }: ShareButtonDataProps & { onClose: () => void }) {
   const [copied, setCopied] = useState(false);
   const [view, setView] = useState<"share" | "export">("share");
-  const { track, markFeatureUsed } = useAnalytics();
+  const { track } = useAnalytics();
 
   const handleCopy = async () => {
     try {
@@ -84,7 +84,6 @@ const ShareModalContent = React.memo(function ShareModalContent({
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
       track("article_shared", { method: "copy_link" });
-      markFeatureUsed("share");
     } catch (error) {
       console.error("Failed to copy link:", error);
     }
@@ -95,7 +94,6 @@ const ShareModalContent = React.memo(function ShareModalContent({
       try {
         await navigator.share({ url });
         track("article_shared", { method: "native" });
-        markFeatureUsed("share");
         onClose();
       } catch (error) {
         console.log("Share cancelled:", error);
@@ -224,7 +222,7 @@ const ShareModalContent = React.memo(function ShareModalContent({
               href={shareUrls.x}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => { track("article_shared", { method: "x_twitter" }); markFeatureUsed("share"); }}
+              onClick={() => { track("article_shared", { method: "x_twitter" }); }}
               className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
             >
               <XTwitterIcon className="size-3.5" />
@@ -235,7 +233,7 @@ const ShareModalContent = React.memo(function ShareModalContent({
               href={shareUrls.linkedin}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => { track("article_shared", { method: "linkedin" }); markFeatureUsed("share"); }}
+              onClick={() => { track("article_shared", { method: "linkedin" }); }}
               className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
             >
               <Linkedin className="size-3.5" />
@@ -246,7 +244,7 @@ const ShareModalContent = React.memo(function ShareModalContent({
               href={shareUrls.reddit}
               target="_blank"
               rel="noopener noreferrer"
-              onClick={() => { track("article_shared", { method: "reddit" }); markFeatureUsed("share"); }}
+              onClick={() => { track("article_shared", { method: "reddit" }); }}
               className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
             >
               <RedditIcon className="size-3.5" />
