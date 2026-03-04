@@ -20,18 +20,8 @@ function hashIP(ip: string): string {
 let client: PostHog | null = null;
 
 function getClient(): PostHog | null {
-  if (client) return client;
-
-  const apiKey = process.env.POSTHOG_API_KEY;
-  const host = process.env.POSTHOG_HOST;
-  if (!apiKey || !host) return null;
-
-  client = new PostHog(apiKey, {
-    host,
-    flushAt: 50,
-    flushInterval: 5000,
-  });
-  return client;
+  // PostHog disabled
+  return null;
 }
 
 // ---------------------------------------------------------------------------
