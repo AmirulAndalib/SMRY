@@ -525,7 +525,7 @@ export async function fetchZeroClickOffers(context: {
         continue;
       }
 
-      logger.debug({ count: offers.length, requested: context.limit, attempt }, "ZeroClick offers received");
+      logger.info({ count: offers.length, requested: context.limit, attempt }, "ZeroClick offers received");
       memTracker.end({ success: true, offer_count: offers.length, attempt });
       return offers;
     } catch (error) {

@@ -957,16 +957,14 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
         // Emit extraction_outcome tracking event (only when at least one source got classified)
         const hasClassification = Object.values(sourceMeta).some(m => m.classification != null);
         if (env.CLASSIFIER_ENABLED && hasClassification) {
-          logger.debug({
+          logger.info({
             hostname,
             winning_source: bestResult.source,
             winning_classification: bestResult.classification?.outcome || "unknown",
             winning_confidence: bestResult.classification?.confidence || 0,
-            winning_tier: bestResult.classification ? (CLASSIFIER_TIER[bestResult.classification.outcome] ?? 2) : null,
             selection_reason: selectionReason,
-            sources: sourceMeta,
             total_fetch_ms: totalFetchMs,
-          }, `Extraction outcome: ${bestResult.source} won (tier=${bestResult.classification?.outcome || "no_classifier"}, len=${bestResult.article.length})`);
+          }, `Extraction outcome: ${bestResult.source} won (${bestResult.classification?.outcome || "no_classifier"}, ${totalFetchMs}ms)`);
 
         }
 

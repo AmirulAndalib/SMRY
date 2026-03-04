@@ -139,7 +139,7 @@ export function createRequestContext(initial?: InitialContext): RequestContext {
     if (outcome === "success") {
       logger.debug(event, "request completed");
     } else if (errorSeverity === "expected") {
-      logger.debug(event, "request completed");
+      logger.info(event, "request failed (expected)");
     } else if (errorSeverity === "degraded") {
       logger.warn(event, "request completed");
     } else {

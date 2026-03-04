@@ -268,9 +268,9 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
 
           if (zcOffers.length > 0) {
             zcAds = zcOffers.map(mapZeroClickOfferToAd);
-            logger.debug({ url, zcCount: zcAds.length }, "Ad(s) received from ZeroClick");
+            logger.info({ url, zcCount: zcAds.length }, "Ad(s) received from ZeroClick");
           } else {
-            logger.debug({ url }, "No ads from ZeroClick");
+            logger.info({ url }, "No ads from ZeroClick");
           }
         } catch (zcError) {
           logger.warn({ error: String(zcError) }, "ZeroClick primary fetch error");
@@ -414,7 +414,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
         const gravityCount = allAds.length - zcCount;
 
         // Log final waterfall result for revenue analysis
-        logger.debug({
+        logger.info({
           url_host: hostname,
           zeroclick_count: zcCount,
           gravity_count: gravityCount,
