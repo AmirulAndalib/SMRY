@@ -129,12 +129,12 @@ export function GravityAd({ ad, placement, onVisible, onDismiss, onClick, classN
   const adRef = useRef<HTMLAnchorElement>(null);
   const adWrapperRef = useRef<HTMLDivElement>(null);
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
-  const { track } = useAnalytics();
+  const { trackViaBeacon } = useAnalytics();
 
   const handleClick = useCallback(() => {
-    track("ad_click", { placement, ad_provider: ad.ad_provider, brand_name: ad.brandName });
+    trackViaBeacon("ad_click", { placement, ad_provider: ad.ad_provider, brand_name: ad.brandName });
     onClick?.();
-  }, [track, placement, ad.ad_provider, ad.brandName, onClick]);
+  }, [trackViaBeacon, placement, ad.ad_provider, ad.brandName, onClick]);
 
   // Reset on ad change
   useLayoutEffect(() => {
