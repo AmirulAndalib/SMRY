@@ -325,6 +325,9 @@ export function useTTSHighlight({
     document.addEventListener("mousedown", handleMouseDown, true)
     document.addEventListener("click", handleClick, true)
 
+    const domToAlignMap = domToAlignMapRef.current
+    const alignToDomMap = alignToDomMapRef.current
+
     return () => {
       document.removeEventListener("mousedown", handleMouseDown, true)
       document.removeEventListener("click", handleClick, true)
@@ -337,8 +340,8 @@ export function useTTSHighlight({
       spanMapRef.current.clear()
       domWordCountRef.current = 0
       alignWordCountRef.current = 0
-      domToAlignMapRef.current.clear()
-      alignToDomMapRef.current.clear()
+      domToAlignMap.clear()
+      alignToDomMap.clear()
       prevIndexRef.current = -1
       initializedRef.current = false
       setTimeout(() => {

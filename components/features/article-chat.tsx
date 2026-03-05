@@ -461,9 +461,9 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
               <div className="flex-1 flex flex-col items-center justify-center text-center mb-3 sm:mb-6">
                 <div className="relative mb-3">
                   <div className="absolute inset-0 bg-primary/5 blur-2xl rounded-full scale-150" />
-                  <Logo size="lg" className="text-primary/70 relative" />
+                  <Logo size="lg" className="text-foreground relative" />
                 </div>
-                <p className="text-[13px] text-muted-foreground/60">
+                <p className="text-[13px] text-muted-foreground">
                   Ask anything about this article
                 </p>
               </div>

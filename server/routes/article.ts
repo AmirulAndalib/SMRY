@@ -117,52 +117,6 @@ async function cacheHtmlContentSeparately(source: string, url: string, htmlConte
   }
 }
 
-async function saveOrReturnLongerArticle(key: string, newArticle: CachedArticle, existing?: CachedArticle | null): Promise<CachedArticle> {
-  try {
-    const validation = CachedArticleSchema.safeParse(newArticle);
-    if (!validation.success) throw new Error("Invalid article");
-
-    const validated = validation.data;
-
-    const saveToCache = async (article: CachedArticle) => {
-      const metaKey = `meta:${key}`;
-      const metadata = { title: article.title, siteName: article.siteName, length: article.length, byline: article.byline, publishedTime: article.publishedTime, image: article.image };
-      // Keep only the 50KB preview in main cache — full htmlContent is cached separately
-      const articleForCache = {
-        ...article,
-        htmlContent: article.htmlContent?.slice(0, HTML_PREVIEW_LIMIT),
-      };
-      const compressed = await compressAsync(articleForCache);
-      await Promise.all([redis.set(key, compressed, { ex: ARTICLE_CACHE_TTL }), redis.set(metaKey, metadata, { ex: ARTICLE_CACHE_TTL })]);
-    };
-
-    let cachedData = existing;
-    if (cachedData === undefined) {
-      const raw = await redis.get(key);
-      cachedData = await decompressAsync(raw);
-    }
-
-    if (cachedData) {
-      const existingValidation = CachedArticleSchema.safeParse(cachedData);
-      if (!existingValidation.success) {
-        await saveToCache(validated);
-        return validated;
-      }
-      const existingArticle = existingValidation.data;
-      // Prefer article with longer text content
-      if (validated.length > existingArticle.length) {
-        await saveToCache(validated);
-        return validated;
-      }
-      return existingArticle;
-    }
-    await saveToCache(validated);
-    return validated;
-  } catch {
-    return newArticle;
-  }
-}
-
 async function fetchArticleWithSmryFast(url: string, externalSignal?: AbortSignal, classify = false): Promise<{ article: CachedArticle; cacheURL: string; classification?: ClassificationResult | null } | { error: AppError }> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 12000); // 12s timeout for direct fetch

@@ -48,20 +48,6 @@ function applyCSSVariables(preferences: ReaderPreferences) {
   body.style.setProperty("--reader-content-width", contentWidth);
 }
 
-// Remove CSS variables
-function removeCSSVariables() {
-  if (typeof document === "undefined") return;
-
-  const root = document.documentElement;
-  const body = document.body;
-
-  const vars = ["--reader-font-family", "--reader-font-size", "--reader-line-height", "--reader-content-width"];
-  vars.forEach(v => {
-    root.style.removeProperty(v);
-    body.style.removeProperty(v);
-  });
-}
-
 export function useReaderPreferences() {
   const [preferences, setPreferences, hasLoaded] = useLocalStorage<ReaderPreferences>(
     STORAGE_KEY,

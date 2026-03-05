@@ -46,9 +46,6 @@ export function useHistory(isPremium: boolean = false) {
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
 
-  // Max items (all users get full history)
-  const maxItems = Infinity;
-
   // Read initial value from localStorage
   useEffect(() => {
     const timer = setTimeout(() => {

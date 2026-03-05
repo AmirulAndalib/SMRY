@@ -121,25 +121,34 @@ function ThreadItem({
         <button
           onClick={onSelect}
           className={cn(
-            "flex w-full items-center gap-2 rounded-lg px-2.5 py-1.5 text-left transition-colors",
+            "flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors",
             isActive
               ? "bg-accent/70"
               : "hover:bg-accent/30"
           )}
         >
+          {/* Icon */}
+          <div className={cn(
+            "shrink-0 flex items-center justify-center size-7 rounded-md",
+            isActive ? "bg-primary/10" : "bg-muted/60"
+          )}>
+            {thread.isPinned ? (
+              <Pin className={cn("size-3", isActive ? "text-primary" : "text-muted-foreground")} />
+            ) : (
+              <MessageSquare className={cn("size-3", isActive ? "text-primary" : "text-muted-foreground")} />
+            )}
+          </div>
+
           <div className="flex-1 min-w-0">
             <span
-              className={cn(
-                "block truncate text-[13px]",
-                isActive ? "text-foreground" : "text-foreground/70"
-              )}
+              className="block truncate text-[13px] font-medium text-foreground"
               title={displayTitle}
             >
               {displayTitle}
             </span>
-            <span className="block text-[11px] text-muted-foreground/40 tabular-nums truncate">
+            <span className="block text-[11px] text-muted-foreground tabular-nums truncate mt-0.5">
               {formatRelativeTime(thread.updatedAt)}
-              {(() => { const c = thread.messages.filter(m => m.role === "user").length; return c > 0 ? ` \u00B7 ${c} message${c !== 1 ? "s" : ""}` : ""; })()}
+              {(() => { const c = thread.messages.filter(m => m.role === "user").length; return c > 0 ? ` \u00B7 ${c} msg${c !== 1 ? "s" : ""}` : ""; })()}
             </span>
           </div>
         </button>
@@ -239,14 +248,18 @@ function ThreadGroup({
   if (threads.length === 0) return null;
 
   const isArticleGroup = !KNOWN_LABELS.has(label);
-  const articleDomain = isArticleGroup ? threads[0]?.articleDomain : null;
 
   return (
     <div className="mb-0.5">
-      <div className="px-3 pt-3 pb-1">
-        <span className="block text-[11px] font-medium tracking-wider text-muted-foreground/50 truncate" title={isArticleGroup ? label : undefined}>{label}</span>
-        {articleDomain && (
-          <span className="block text-[11px] text-muted-foreground/30 truncate">{articleDomain}</span>
+      <div className="px-3 pt-3 pb-1.5">
+        {isArticleGroup ? (
+          <span className="block text-[11px] font-medium text-muted-foreground truncate" title={label}>
+            {label}
+          </span>
+        ) : (
+          <span className="block text-[10px] font-medium tracking-wider text-muted-foreground/80 uppercase">
+            {label}
+          </span>
         )}
       </div>
       <div className="px-1.5 space-y-px">
@@ -282,7 +295,7 @@ function PremiumGate() {
           className="text-[13px] font-semibold text-foreground mb-1"
           style={{ textWrap: "balance" }}
         >
-          Save your chat history
+          Save your session history
         </h3>
         <p className="text-[11px] text-muted-foreground leading-relaxed mb-4">
           Keep all your conversations and access them anywhere.
@@ -566,11 +579,11 @@ export function ChatSidebar({
                 ))
               ) : (
                 <div className="flex flex-col items-center justify-center h-full px-6 text-center py-8">
-                  <HistoryIcon className="size-8 text-muted-foreground/30 mb-3" aria-hidden="true" />
-                  <p className="text-sm text-muted-foreground/50">
-                    No chat history yet
+                  <HistoryIcon className="size-8 text-muted-foreground/60 mb-3" aria-hidden="true" />
+                  <p className="text-sm text-muted-foreground">
+                    No session history yet
                   </p>
-                  <p className="text-xs text-muted-foreground/30 mt-1">
+                  <p className="text-xs text-muted-foreground/70 mt-1">
                     Start a conversation to see it here
                   </p>
                 </div>

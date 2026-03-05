@@ -5,7 +5,6 @@ import {
   Share2 as ShareIcon,
   Link2,
   Check,
-  Linkedin,
   X,
   Copy,
   ShareIos,
@@ -21,7 +20,8 @@ import { ExportArticleContent, type ArticleExportData } from "@/components/featu
 import { Source } from "@/types/api";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
 
-// Reddit SVG
+// --- Social SVG Icons ---
+
 const RedditIcon = ({ className }: { className?: string }) => (
   <svg
     className={className}
@@ -44,6 +44,32 @@ const XTwitterIcon = ({ className }: { className?: string }) => (
   </svg>
 );
 
+const LinkedInIcon = ({ className }: { className?: string }) => (
+  <svg
+    className={className}
+    viewBox="0 0 24 24"
+    fill="currentColor"
+    xmlns="http://www.w3.org/2000/svg"
+  >
+    <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 0 1-2.063-2.065 2.064 2.064 0 1 1 2.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
+  </svg>
+);
+
+/** Extract a clean display URL from the full smry URL */
+function getDisplayUrl(smryUrl: string): string {
+  try {
+    const afterSmry = smryUrl.replace(/^https?:\/\/smry\.ai\//, "");
+    if (!afterSmry) return "smry.ai";
+    const innerUrl = new URL(
+      afterSmry.startsWith("http") ? afterSmry : `https://${afterSmry}`
+    );
+    const domain = innerUrl.hostname.replace(/^www\./, "");
+    return `smry.ai/${domain}`;
+  } catch {
+    return "smry.ai";
+  }
+}
+
 interface ShareButtonDataProps {
   url: string;
   originalUrl?: string;
@@ -64,6 +90,55 @@ interface ShareButtonProps extends ShareButtonDataProps {
 // Check for native share support once at module level
 const hasNativeShareSupport =
   typeof navigator !== "undefined" && "share" in navigator;
+
+// --- Social circle button ---
+function SocialButton({
+  href,
+  onClick,
+  icon,
+  label,
+  bgClass,
+}: {
+  href?: string;
+  onClick?: () => void;
+  icon: React.ReactNode;
+  label: string;
+  bgClass: string;
+}) {
+  const inner = (
+    <>
+      <span
+        className={cn(
+          "flex size-11 items-center justify-center rounded-full transition-transform hover:scale-105 active:scale-95",
+          bgClass
+        )}
+      >
+        {icon}
+      </span>
+      <span className="mt-1.5 text-[11px] text-muted-foreground">{label}</span>
+    </>
+  );
+
+  if (href) {
+    return (
+      <a
+        href={href}
+        target="_blank"
+        rel="noopener noreferrer"
+        onClick={onClick}
+        className="flex flex-col items-center"
+      >
+        {inner}
+      </a>
+    );
+  }
+
+  return (
+    <button type="button" onClick={onClick} className="flex flex-col items-center">
+      {inner}
+    </button>
+  );
+}
 
 // Memoized modal content
 const ShareModalContent = React.memo(function ShareModalContent({
@@ -102,6 +177,7 @@ const ShareModalContent = React.memo(function ShareModalContent({
   };
 
   const shareUrls = generateShareUrls(originalUrl || "", articleTitle);
+  const displayUrl = getDisplayUrl(url);
 
   // Export view
   if (view === "export" && articleExportData) {
@@ -142,12 +218,12 @@ const ShareModalContent = React.memo(function ShareModalContent({
   return (
     <div className="flex flex-col">
       {/* Header */}
-      <div className="flex items-center justify-between p-4">
+      <div className="flex items-center justify-between px-5 pt-5 pb-1">
         <h2 className="text-base font-semibold text-foreground">Share</h2>
         <button
           type="button"
           onClick={onClose}
-          className="flex size-8 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors -mr-1"
+          className="flex size-7 items-center justify-center rounded-full text-muted-foreground hover:bg-muted hover:text-foreground transition-colors -mr-1"
           aria-label="Close"
         >
           <X className="size-4" />
@@ -155,105 +231,79 @@ const ShareModalContent = React.memo(function ShareModalContent({
       </div>
 
       {/* Content */}
-      <div className="px-4 pb-6">
-        {/* Article Preview Card */}
-        <div className="rounded-xl border border-border bg-muted/30 p-4 mb-5">
-          <p className="text-[15px] font-medium text-foreground leading-snug line-clamp-2 mb-1.5">
-            {articleTitle || "Untitled article"}
+      <div className="px-5 pb-5 pt-3">
+        {/* Article Preview */}
+        {articleTitle && (
+          <p className="text-[15px] font-medium text-foreground leading-snug line-clamp-2 mb-4">
+            {articleTitle}
           </p>
-          <p className="text-xs text-muted-foreground">
-            via smry.ai
-          </p>
-        </div>
+        )}
 
-        {/* Copy Link Section */}
-        <div className="mb-5">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">
-            Link
-          </label>
-          <div className="flex gap-2">
-            <div className="flex-1 flex items-center gap-2 rounded-lg border border-border bg-background px-3 py-2.5 min-w-0">
-              <Link2 className="size-4 text-muted-foreground shrink-0" />
-              <span className="text-sm text-muted-foreground truncate">
-                {url}
-              </span>
-            </div>
-            <button
-              onClick={handleCopy}
-              className={cn(
-                "shrink-0 flex items-center gap-2 px-4 py-2.5 rounded-lg font-medium text-sm transition-all",
-                copied
-                  ? "bg-green-500/10 text-green-600 dark:text-green-400 border border-green-500/20"
-                  : "bg-primary text-primary-foreground hover:bg-primary/90"
-              )}
-            >
-              {copied ? (
-                <>
-                  <Check className="size-4" />
-                  Copied
-                </>
-              ) : (
-                <>
-                  <Copy className="size-4" />
-                  Copy
-                </>
-              )}
-            </button>
+        {/* Copy Link Row */}
+        <div className="flex items-center gap-2 mb-6">
+          <div className="flex-1 flex items-center gap-2.5 rounded-lg border border-border bg-muted/40 px-3 py-2 min-w-0">
+            <Link2 className="size-4 text-muted-foreground shrink-0" />
+            <span className="text-sm text-foreground/70 truncate select-all">
+              {displayUrl}
+            </span>
           </div>
-        </div>
-
-        {/* Share Options */}
-        <div className="mb-5">
-          <label className="text-xs font-medium text-muted-foreground uppercase tracking-wide mb-2 block">
-            Share to
-          </label>
-          <div className="flex flex-wrap gap-1.5">
-            {hasNativeShareSupport && (
-              <button
-                onClick={handleNativeShare}
-                className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
-              >
-                <ShareIcon className="size-3.5" />
-                <span>More</span>
-              </button>
+          <button
+            onClick={handleCopy}
+            className={cn(
+              "shrink-0 flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition-all",
+              copied
+                ? "bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
+                : "bg-primary text-primary-foreground hover:bg-primary/90"
             )}
-
-            <a
-              href={shareUrls.x}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => { track("article_shared", { method: "x_twitter" }); }}
-              className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <XTwitterIcon className="size-3.5" />
-              <span>X</span>
-            </a>
-
-            <a
-              href={shareUrls.linkedin}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => { track("article_shared", { method: "linkedin" }); }}
-              className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <Linkedin className="size-3.5" />
-              <span>LinkedIn</span>
-            </a>
-
-            <a
-              href={shareUrls.reddit}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={() => { track("article_shared", { method: "reddit" }); }}
-              className="flex h-6 shrink-0 items-center justify-center gap-1.5 rounded-[5px] border-[0.5px] border-border bg-surface-1 px-2.5 text-[12px] font-medium text-muted-foreground shadow-[0_4px_4px_-1px_rgba(0,0,0,0.06),0_1px_1px_0_rgba(0,0,0,0.12)] transition-colors hover:bg-accent hover:text-foreground"
-            >
-              <RedditIcon className="size-3.5" />
-              <span>Reddit</span>
-            </a>
-          </div>
+          >
+            {copied ? (
+              <>
+                <Check className="size-3.5" />
+                Copied!
+              </>
+            ) : (
+              <>
+                <Copy className="size-3.5" />
+                Copy link
+              </>
+            )}
+          </button>
         </div>
 
-        {/* Export Article — prominent separate section */}
+        {/* Social Icons Row */}
+        <div className="flex items-start justify-center gap-5 mb-6">
+          <SocialButton
+            href={shareUrls.x}
+            onClick={() => track("article_shared", { method: "x_twitter" })}
+            icon={<XTwitterIcon className="size-[18px] text-white dark:text-black" />}
+            label="X"
+            bgClass="bg-black dark:bg-white"
+          />
+          <SocialButton
+            href={shareUrls.linkedin}
+            onClick={() => track("article_shared", { method: "linkedin" })}
+            icon={<LinkedInIcon className="size-[18px] text-white" />}
+            label="LinkedIn"
+            bgClass="bg-[#0A66C2]"
+          />
+          <SocialButton
+            href={shareUrls.reddit}
+            onClick={() => track("article_shared", { method: "reddit" })}
+            icon={<RedditIcon className="size-[18px] text-white" />}
+            label="Reddit"
+            bgClass="bg-[#FF4500]"
+          />
+          {hasNativeShareSupport && (
+            <SocialButton
+              onClick={handleNativeShare}
+              icon={<ShareIcon className="size-[18px] text-foreground" />}
+              label="More"
+              bgClass="bg-muted"
+            />
+          )}
+        </div>
+
+        {/* Export Article */}
         {articleExportData && (
           <button
             onClick={() => setView("export")}

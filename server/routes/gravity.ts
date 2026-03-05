@@ -147,7 +147,7 @@ export const gravityRoutes = new Elysia({ prefix: "/api" })
   .post(
     "/px",
     async ({ body, set }) => {
-      const { type, sessionId, hostname, brandName, adTitle, adText, clickUrl, impUrl, cta, favicon, deviceType, os, browser, adProvider: _adProvider, placement, adIndex } = body;
+      const { type, hostname, brandName, impUrl } = body;
 
       // Derive provider from impUrl prefix only — never trust client-sent adProvider
       // for forwarding decisions (prevents spoofing to skip Gravity billing)

@@ -1,6 +1,7 @@
 "use client";
 
-import React, { useCallback } from "react";
+import React, { useCallback, useState } from "react";
+import { useResizeHandle } from "@/lib/hooks/use-resize-handle";
 import { Highlighter, X } from "@/components/ui/icons";
 import { AnnotationsPanel } from "@/components/features/annotations-panel";
 import {
@@ -34,7 +35,15 @@ export function AnnotationsSidebar({
   noteEditId?: string | null;
   sidebarOffsetStyle?: React.CSSProperties;
 }) {
-  // Close handler works for both desktop (onOpenChange) and mobile (onOpenMobileChange)
+  const [width, setWidth] = useState(320);
+  const { onPointerDown } = useResizeHandle({
+    width,
+    onWidthChange: setWidth,
+    minWidth: 280,
+    maxWidth: 600,
+    side: "right",
+  });
+
   const handleClose = useCallback(() => {
     onOpenChange(false);
     onOpenMobileChange?.(false);
@@ -47,14 +56,22 @@ export function AnnotationsSidebar({
       openMobile={openMobile}
       onOpenMobileChange={onOpenMobileChange}
       className="!min-h-0 !w-auto absolute inset-0 z-30 pointer-events-none"
-      style={{ "--sidebar-width": "320px" } as React.CSSProperties}
+      style={{ "--sidebar-width": `${width}px` } as React.CSSProperties}
     >
       <Sidebar
         side="right"
         collapsible="offcanvas"
-        className="pointer-events-auto"
+        className="pointer-events-auto border-l-0!"
         style={sidebarOffsetStyle}
       >
+        {/* Resize handle — wide hit area, thin visible line */}
+        <div
+          className="absolute -left-1.5 top-0 bottom-0 w-3 cursor-col-resize z-20 group touch-none"
+          onPointerDown={onPointerDown}
+        >
+          <div className="absolute left-1.5 top-0 bottom-0 w-px bg-border transition-colors group-hover:bg-border group-active:bg-border" />
+        </div>
+
         <SidebarHeader className="flex-row items-center justify-between px-3 py-2 border-b border-border/40">
           <div className="flex items-center gap-2">
             <Highlighter className="size-4 text-muted-foreground" />
@@ -62,7 +79,7 @@ export function AnnotationsSidebar({
           </div>
           <button
             onClick={handleClose}
-            className="flex size-7 items-center justify-center rounded-md text-foreground/50 hover:text-foreground hover:bg-muted/50 transition-colors"
+            className="flex size-7 items-center justify-center rounded-md text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-colors"
             aria-label="Close annotations"
           >
             <X className="size-4" aria-hidden="true" />

@@ -426,7 +426,7 @@ export function useTTS(
       setError(errMsg);
       setStatus("error");
     }
-  }, [articleTextContent, articleUrl, canUse, cleanup, getToken, isPremium, status, voice]);
+  }, [articleTextContent, articleUrl, cleanup, getToken, isPremium, status, voice]);
 
   const stop = useCallback(() => {
     abortRef.current?.abort();

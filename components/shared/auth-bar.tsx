@@ -52,7 +52,7 @@ export function AuthBar({
   const { isPremium, isLoading } = useIsPremium();
 
   const isCompact = variant === "compact";
-  const avatarSize = isCompact ? "size-7" : "size-9";
+  const avatarSize = isCompact ? "size-8" : "size-9";
 
   // Build the auth redirect URL with return URL for server-side premium check
   // This allows the /auth/redirect page to know where to send the user back
@@ -73,9 +73,9 @@ export function AuthBar({
           <Link
             href="/pricing"
             className={cn(
-              "inline-flex items-center gap-1.5 font-medium transition-colors",
+              "inline-flex items-center gap-1.5 font-medium transition-colors min-h-[44px] px-2",
               "text-foreground hover:text-muted-foreground",
-              isCompact ? "text-xs px-2 py-1" : "text-sm"
+              isCompact ? "text-sm" : "text-sm"
             )}
           >
             Upgrade
@@ -99,9 +99,9 @@ export function AuthBar({
           >
             <button
               className={cn(
-                "font-medium transition-colors",
+                "font-medium transition-colors min-h-[44px] px-2",
                 "text-muted-foreground hover:text-foreground",
-                isCompact ? "text-xs" : "text-sm"
+                isCompact ? "text-sm" : "text-sm"
               )}
             >
               Sign In
@@ -115,15 +115,13 @@ export function AuthBar({
             href="/pricing"
             onClick={() => storeReturnUrl()}
             className={cn(
-              "group relative font-semibold rounded-full overflow-hidden transition-all",
+              "inline-flex items-center justify-center font-semibold rounded-full overflow-hidden transition-colors",
               "bg-linear-to-r from-amber-400 via-yellow-300 to-amber-400 bg-[length:200%_100%]",
-              "text-black shadow-[0_0_12px_rgba(251,191,36,0.3)]",
-              "hover:shadow-[0_0_20px_rgba(251,191,36,0.5)] hover:scale-105",
-              "active:scale-95",
+              "text-black",
               "animate-[shimmer_2.5s_ease-in-out_infinite]",
               isCompact
-                ? "px-2.5 py-0.5 text-xs"
-                : "px-3.5 py-1.5 text-sm"
+                ? "px-3 min-h-[36px] text-sm"
+                : "px-3.5 min-h-[44px] text-sm"
             )}
           >
             Get Pro

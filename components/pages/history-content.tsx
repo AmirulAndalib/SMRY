@@ -1089,7 +1089,7 @@ function HistoryContent() {
     );
     observer.observe(el);
     return () => observer.disconnect();
-  }, [hasMore]);
+  }, [hasMore, setVisibleCount]);
 
   const handleClearSearch = useCallback(() => setSearchQuery(""), []);
 

@@ -8,7 +8,7 @@ import { useIsPremium } from "@/lib/hooks/use-is-premium";
 import { ArrowLeft, AiMagic, Highlighter } from "@/components/ui/icons";
 import { Logo } from "@/components/shared/logo";
 import { AuthBar } from "@/components/shared/auth-bar";
-import { Kbd } from "@/components/ui/kbd";
+
 import Link from "next/link";
 import { cn } from "@/lib/utils";
 
@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/scrub-bar";
 import { Button } from "@/components/ui/button";
 import { useTTSHighlight } from "@/components/hooks/use-tts-highlight";
+import { useResizeHandle } from "@/lib/hooks/use-resize-handle";
 import { VOICE_PRESETS, getVoiceAvatarGradient, isVoiceAllowed } from "@/lib/tts-provider";
 import {
   SkipBack10,
@@ -465,7 +466,6 @@ function TTSControls({ onClose, voice, onVoiceChange, isPremium, usageCount = 0,
     startScrubbing,
     endScrubbing,
   } = useTTSPlayer();
-  const { track } = useAnalytics();
 
   const [rate, setRate] = React.useState(1);
   const [showSpeed, setShowSpeed] = React.useState(false);
@@ -1333,6 +1333,14 @@ export function ProxyContent({ url }: ProxyContentProps) {
   const [styleOptionsOpen, setStyleOptionsOpen] = useState(false);
   const [shareOpen, setShareOpen] = useState(false);
   const [sidebarActiveTab, setSidebarActiveTab] = useState<"chat" | "history">("chat");
+  const [sidebarWidth, setSidebarWidth] = useState(440);
+  const { onPointerDown: onSidebarPointerDown } = useResizeHandle({
+    width: sidebarWidth,
+    onWidthChange: setSidebarWidth,
+    minWidth: 340,
+    maxWidth: 700,
+    side: "right",
+  });
   const [annotationsSidebarOpen, setAnnotationsSidebarOpenRaw] = useState(false);
   const [noteEditHighlightId, setNoteEditHighlightId] = useState<string | null>(null);
   const annotationsSidebarOpenRef = useRef(annotationsSidebarOpen);
@@ -1378,10 +1386,10 @@ export function ProxyContent({ url }: ProxyContentProps) {
     renameThread,
     groupedThreads,
     isLoaded: threadsLoaded,
-    loadMore,
-    hasMore,
-    isLoadingMore,
-    searchThreads,
+    loadMore: _loadMore,
+    hasMore: _hasMore,
+    isLoadingMore: _isLoadingMore,
+    searchThreads: _searchThreads,
     getThreadWithMessages,
     findThreadByArticleUrl,
   } = useChatThreads(isPremium, url);
@@ -1409,6 +1417,19 @@ export function ProxyContent({ url }: ProxyContentProps) {
     },
     [setQuery, setAnnotationsSidebarOpen]
   );
+
+  // Toggle chat history in sidebar (used by floating toolbar button + ⌘⇧H)
+  const handleHistoryToggle = React.useCallback(() => {
+    if (sidebarOpen && sidebarActiveTab === "history") {
+      handleSidebarChange(false);
+    } else {
+      if (!sidebarOpen) {
+        handleSidebarChange(true);
+      }
+      tabbedSidebarRef.current?.setActiveTab("history");
+      setSidebarActiveTab("history");
+    }
+  }, [sidebarOpen, sidebarActiveTab, handleSidebarChange]);
 
   // Copy page as markdown (used by ⌘C keyboard shortcut)
   // Note: Visual feedback is handled internally by FloatingToolbar when using the menu
@@ -1604,6 +1625,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
     });
     // Clear current chat messages for the new thread
     tabbedSidebarRef.current?.clearMessages();
+    mobileChatDrawerRef.current?.clearMessages();
   }, [createThread, url, articleTitle]);
 
   // Use ref for currentThreadId so the callback always reads the latest value
@@ -1642,6 +1664,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
       const thread = await getThreadWithMessages(match.id);
       if (thread && thread.messages.length > 0) {
         tabbedSidebarRef.current?.setMessages(thread.messages as UIMessage[]);
+        mobileChatDrawerRef.current?.setMessages(thread.messages as UIMessage[]);
       }
       requestAnimationFrame(() => {
         isLoadingThreadRef.current = false;
@@ -1661,8 +1684,10 @@ export function ProxyContent({ url }: ProxyContentProps) {
     const thread = await getThreadWithMessages(threadId);
     if (thread && thread.messages.length > 0) {
       tabbedSidebarRef.current?.setMessages(thread.messages as UIMessage[]);
+      mobileChatDrawerRef.current?.setMessages(thread.messages as UIMessage[]);
     } else {
       tabbedSidebarRef.current?.clearMessages();
+      mobileChatDrawerRef.current?.clearMessages();
     }
 
     // Allow the echo effect to fire and be skipped before re-enabling saves
@@ -1716,6 +1741,17 @@ export function ProxyContent({ url }: ProxyContentProps) {
       currentThreadIdRef.current = newThread.id;
     }
   }, [isPremium, updateThread, createThread, url, articleTitle]);
+
+  // Preserve mobile chat messages across drawer open/close (drawer Portal unmounts content)
+  const [mobileMessages, setMobileMessages] = useState<UIMessage[]>([]);
+  const handleMobileMessagesChange = useCallback((messages: UIMessage[]) => {
+    setMobileMessages(messages);
+    handleMessagesChange(messages);
+  }, [handleMessagesChange]);
+  // Thread messages take priority; otherwise use preserved mobile messages
+  const mobileInitialMessages = threadInitialMessages.length > 0
+    ? threadInitialMessages
+    : mobileMessages;
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -1903,6 +1939,12 @@ export function ProxyContent({ url }: ProxyContentProps) {
   const sidebarOffsetStyle = bannerHeight > 0
     ? { top: `${bannerHeight}px`, height: `calc(100svh - ${bannerHeight}px)` } as React.CSSProperties
     : undefined;
+  // Annotations sidebar needs to clear the page header (h-11 = 44px) in addition to the banner
+  const headerHeight = 44;
+  const annotationsOffsetStyle = {
+    top: `${bannerHeight + headerHeight}px`,
+    height: `calc(100svh - ${bannerHeight + headerHeight}px)`,
+  } as React.CSSProperties;
 
   return (
     <div className="flex h-dvh flex-col bg-background">
@@ -1926,103 +1968,69 @@ export function ProxyContent({ url }: ProxyContentProps) {
               open={sidebarOpen}
               onOpenChange={handleSidebarChange}
               className="h-full min-h-0!"
-              style={{ "--sidebar-width": "440px" } as React.CSSProperties}
+              style={{ "--sidebar-width": `${sidebarWidth}px` } as React.CSSProperties}
             >
               {/* Main content area — flex-1 shrinks when sidebar gap appears */}
-              <div className="flex-1 min-w-0 relative h-full">
-                {/* Top-left — back button + auth */}
-                <div className="absolute top-4 left-4 z-50 flex items-center gap-2">
+              <div className="flex-1 min-w-0 relative h-full flex flex-col">
+                {/* Desktop Header Bar */}
+                <header className="shrink-0 flex items-center h-11 px-3 border-b border-border/40 bg-background z-50">
+                  {/* Left: Back */}
                   <button
                     onClick={() => window.history.back()}
-                    className="size-10 flex items-center justify-center rounded-xl border border-border/60 bg-background/60 backdrop-blur-sm text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                    className="size-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted/60 transition-colors"
                     aria-label="Go back"
                   >
-                    <ArrowLeft className="size-5" />
+                    <ArrowLeft className="size-4" />
                   </button>
-                  <AuthBar variant="compact" className="h-10 px-3 rounded-xl border border-border/60 bg-background/80 backdrop-blur-md shadow-sm" />
-                </div>
 
-                {/* Top-right action buttons — AI Chat + Annotations */}
-                <div
-                  className="absolute top-4 z-50 flex flex-col items-end gap-2 transition-[right] duration-200 ease-linear"
-                  style={{ right: annotationsSidebarOpen ? 'calc(320px + 1rem)' : '1rem' }}
-                >
-                  {/* AI Chat toggle */}
-                  {(sidebarOpen || annotationsSidebarOpen) ? (
-                    <div className="relative group">
-                      <button
-                        onClick={() => {
-                          if (sidebarOpen) {
-                            handleSidebarChange(false);
-                          } else {
-                            handleSidebarChange(true);
-                            tabbedSidebarRef.current?.setActiveTab("chat");
-                            setSidebarActiveTab("chat");
-                          }
-                        }}
-                        className={cn(
-                          "size-10 flex items-center justify-center rounded-xl border backdrop-blur-md shadow-sm transition-colors",
-                          sidebarOpen
-                            ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
-                            : "border-border/60 bg-background/80 text-muted-foreground hover:text-foreground hover:bg-muted/80"
-                        )}
-                        aria-label={sidebarOpen ? "Close AI Chat (⌘I)" : "Open AI Chat (⌘I)"}
-                      >
-                        <AiMagic className="size-4" />
-                      </button>
-                      <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md border shadow-sm">
-                        {sidebarOpen ? "Close" : "Open"} AI Chat <Kbd className="ml-1 text-[10px] px-1 py-0.5">⌘I</Kbd>
-                      </div>
-                    </div>
-                  ) : (
+                  {/* Spacer */}
+                  <div className="flex-1" />
+
+                  {/* Right: Annotations + AI Chat + divider + Auth */}
+                  <div className="flex items-center gap-0.5">
+                    <button
+                      onClick={() => setAnnotationsSidebarOpen((prev) => !prev)}
+                      className={cn(
+                        "h-7 flex items-center gap-1.5 px-2 rounded-md text-[13px] font-medium transition-colors",
+                        annotationsSidebarOpen
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      )}
+                      aria-label="Toggle Annotations (A)"
+                    >
+                      <Highlighter className="size-3.5" />
+                      <span className="hidden lg:inline">Annotations</span>
+                    </button>
+
                     <button
                       onClick={() => {
-                        handleSidebarChange(true);
-                        tabbedSidebarRef.current?.setActiveTab("chat");
-                        setSidebarActiveTab("chat");
+                        if (sidebarOpen) {
+                          handleSidebarChange(false);
+                        } else {
+                          handleSidebarChange(true);
+                          tabbedSidebarRef.current?.setActiveTab("chat");
+                          setSidebarActiveTab("chat");
+                        }
                       }}
-                      className="flex items-center gap-2.5 h-10 pl-3.5 pr-3 rounded-xl border border-border/60 bg-background/80 backdrop-blur-md shadow-sm text-foreground hover:bg-muted/80 transition-colors"
-                      aria-label="Ask AI (⌘I)"
+                      className={cn(
+                        "h-7 flex items-center gap-1.5 px-2 rounded-md text-[13px] font-medium transition-colors",
+                        sidebarOpen
+                          ? "bg-primary/10 text-primary"
+                          : "text-muted-foreground hover:text-foreground hover:bg-muted/50"
+                      )}
+                      aria-label={sidebarOpen ? "Close AI Chat (⌘I)" : "Open AI Chat (⌘I)"}
                     >
-                      <AiMagic className="size-4" />
-                      <span className="text-sm font-medium">AI Chat</span>
-                      <Kbd className="ml-0.5 text-[10px] px-1.5 py-0.5 bg-muted/80">⌘I</Kbd>
+                      <AiMagic className="size-3.5" />
+                      <span className="hidden lg:inline">AI Chat</span>
                     </button>
-                  )}
 
-                  {/* Annotations toggle */}
-                  {(sidebarOpen || annotationsSidebarOpen) ? (
-                    <div className="relative group">
-                      <button
-                        onClick={() => setAnnotationsSidebarOpen((prev) => !prev)}
-                        className={cn(
-                          "size-10 flex items-center justify-center rounded-xl border backdrop-blur-md shadow-sm transition-colors",
-                          annotationsSidebarOpen
-                            ? "border-primary/30 bg-primary/10 text-primary hover:bg-primary/20"
-                            : "border-border/60 bg-background/80 text-muted-foreground hover:text-foreground hover:bg-muted/80"
-                        )}
-                        aria-label="Toggle Annotations (A)"
-                      >
-                        <Highlighter className="size-4" />
-                      </button>
-                      <div className="absolute right-full mr-2 top-1/2 -translate-y-1/2 pointer-events-none opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap bg-popover text-popover-foreground text-xs px-2 py-1 rounded-md border shadow-sm">
-                        {annotationsSidebarOpen ? "Close" : "Open"} Annotations <Kbd className="ml-1 text-[10px] px-1 py-0.5">A</Kbd>
-                      </div>
-                    </div>
-                  ) : (
-                    <button
-                      onClick={() => setAnnotationsSidebarOpen(true)}
-                      className="flex items-center gap-2.5 h-10 pl-3.5 pr-3 rounded-xl border border-border/60 bg-background/80 backdrop-blur-md shadow-sm text-foreground hover:bg-muted/80 transition-colors"
-                      aria-label="Annotations (A)"
-                    >
-                      <Highlighter className="size-4" />
-                      <span className="text-sm font-medium">Annotations</span>
-                      <Kbd className="ml-0.5 text-[10px] px-1.5 py-0.5 bg-muted/80">A</Kbd>
-                    </button>
-                  )}
-                </div>
+                    <div className="w-px h-4 bg-border/50 mx-1.5" />
 
-                <div ref={desktopScrollRef} data-desktop-scroll className="h-full overflow-y-auto bg-background scrollbar-hide">
+                    <AuthBar variant="compact" />
+                  </div>
+                </header>
+
+                <div ref={desktopScrollRef} data-desktop-scroll className="flex-1 min-h-0 overflow-y-auto bg-background scrollbar-hide">
                   <div className="mx-auto max-w-3xl px-4 sm:px-6 lg:px-8 py-6">
                     <ArticleContent
                       data={articleQuery.data}
@@ -2048,6 +2056,16 @@ export function ProxyContent({ url }: ProxyContentProps) {
                     />
                   </div>
                 </div>
+
+                {/* Annotations Sidebar — overlay from right, offset below header */}
+                <AnnotationsSidebar
+                  open={annotationsSidebarOpen}
+                  onOpenChange={setAnnotationsSidebarOpen}
+                  articleUrl={url}
+                  articleTitle={articleTitle}
+                  noteEditId={noteEditHighlightId}
+                  sidebarOffsetStyle={annotationsOffsetStyle}
+                />
 
                 {/* Fixed bottom-right ad when sidebar is closed */}
                 {!sidebarOpen && !isPremium && sidebarAd && !desktopAdDismissed && (
@@ -2084,6 +2102,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                   onTTSToggle={handleTTSToggle}
                   isTTSActive={tts.isReady || tts.isLoading}
                   isTTSLoading={tts.isLoading}
+                  onHistoryToggle={handleHistoryToggle}
                 />
 
                 {/* TTS floating player (shared component) */}
@@ -2094,20 +2113,17 @@ export function ProxyContent({ url }: ProxyContentProps) {
                   open={settingsOpen}
                   onOpenChange={setSettingsOpen}
                 />
-
-                {/* Annotations Sidebar — slides from right as overlay */}
-                <AnnotationsSidebar
-                  open={annotationsSidebarOpen}
-                  onOpenChange={setAnnotationsSidebarOpen}
-                  articleUrl={url}
-                  articleTitle={articleTitle}
-                  noteEditId={noteEditHighlightId}
-                  sidebarOffsetStyle={sidebarOffsetStyle}
-                />
               </div>
 
               {/* Chat Sidebar — pushes content left when open */}
-              <Sidebar side="right" collapsible="offcanvas" style={sidebarOffsetStyle}>
+              <Sidebar side="right" collapsible="offcanvas" className="border-l-0!" style={sidebarOffsetStyle}>
+                {/* Resize handle — wide hit area, thin visible line */}
+                <div
+                  className="absolute -left-1.5 top-0 bottom-0 w-3 cursor-col-resize z-20 group touch-none"
+                  onPointerDown={onSidebarPointerDown}
+                >
+                  <div className="absolute left-1.5 top-0 bottom-0 w-px bg-border transition-colors group-hover:bg-border group-active:bg-border" />
+                </div>
                 <SidebarContent className="overflow-hidden">
                   <div className="h-full">
                     <TabbedSidebar
@@ -2131,19 +2147,15 @@ export function ProxyContent({ url }: ProxyContentProps) {
                       microAd={!isPremium ? microAd : null}
                       onMicroAdVisible={microAd ? () => { fireImpression(microAd, "chat_input", 4); } : undefined}
                       onMicroAdClick={microAd ? () => { fireClick(microAd, "chat_input", 4); } : undefined}
+                      onTabChange={setSidebarActiveTab}
+                      onNewChat={handleNewChat}
                       threads={threads}
                       activeThreadId={currentThreadId}
-                      onNewChat={handleNewChat}
                       onSelectThread={handleSelectThread}
                       onDeleteThread={deleteThread}
                       onTogglePin={togglePin}
                       onRenameThread={renameThread}
                       groupedThreads={groupedThreads}
-                      hasMore={hasMore}
-                      isLoadingMore={isLoadingMore}
-                      onLoadMore={loadMore}
-                      searchThreads={searchThreads}
-                      onTabChange={setSidebarActiveTab}
                     />
                   </div>
                 </SidebarContent>
@@ -2170,58 +2182,49 @@ export function ProxyContent({ url }: ProxyContentProps) {
                 >
                   {showMobilePromo && <PromoBanner className="md:hidden" />}
                   <UpdateBanner className="md:hidden" />
-                  <header className="flex h-14 items-center bg-background px-4">
-                    {/* Back button - left */}
-                    <div className="flex items-center gap-3 shrink-0">
-                      <button
-                        onClick={() => window.history.back()}
-                        className="size-9 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
-                        aria-label="Go back"
-                      >
-                        <ArrowLeft className="size-5" />
-                      </button>
-                    </div>
+                  <header className="flex h-14 items-center bg-background px-2">
+                    {/* Back button — 44px touch target */}
+                    <button
+                      onClick={() => window.history.back()}
+                      className="size-11 flex items-center justify-center rounded-full text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                      aria-label="Go back"
+                      style={{ touchAction: "manipulation" }}
+                    >
+                      <ArrowLeft className="size-5" />
+                    </button>
 
-                    {/* Domain name - center */}
-                    <div className="flex-1 flex items-center justify-center">
-                      <span className="text-sm font-medium text-muted-foreground truncate max-w-[200px]">
-                        {(() => {
-                          try {
-                            return new URL(url).hostname.replace('www.', '').toUpperCase();
-                          } catch {
-                            return '';
-                          }
-                        })()}
-                      </span>
-                    </div>
+                    {/* Spacer */}
+                    <div className="flex-1" />
 
-                    {/* Right buttons: auth + annotations + AI chat */}
-                    <div className="flex items-center gap-1.5">
-                      <AuthBar variant="compact" showUpgrade={false} showSignIn={false} />
+                    {/* Right: Annotations + Chat + Auth */}
+                    <div className="flex items-center gap-1">
                       <button
                         onClick={() => setMobileAnnotationsOpen(true)}
                         className={cn(
-                          "size-9 flex items-center justify-center rounded-full transition-colors",
+                          "size-11 flex items-center justify-center rounded-full transition-colors",
                           mobileAnnotationsOpen
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted"
                         )}
                         aria-label="Open annotations"
+                        style={{ touchAction: "manipulation" }}
                       >
                         <Highlighter className="size-5" />
                       </button>
                       <button
                         onClick={() => setMobileSummaryOpen(true)}
                         className={cn(
-                          "size-9 flex items-center justify-center rounded-full transition-colors",
+                          "size-11 flex items-center justify-center rounded-full transition-colors",
                           mobileSummaryOpen
                             ? "bg-primary/10 text-primary"
                             : "text-muted-foreground hover:text-foreground hover:bg-muted"
                         )}
                         aria-label="Open chat"
+                        style={{ touchAction: "manipulation" }}
                       >
                         <AiMagic className="size-5" />
                       </button>
+                      <AuthBar variant="compact" />
                     </div>
                   </header>
                 </div>
@@ -2274,19 +2277,16 @@ export function ProxyContent({ url }: ProxyContentProps) {
                 onInlineChatAdVisible={inlineAd ? () => { fireImpression(inlineAd, "mobile_chat_middle", 1); } : footerAd ? () => { fireImpression(footerAd, "mobile_chat_middle", 2); } : undefined}
                 onInlineChatAdClick={inlineAd ? () => { fireClick(inlineAd, "mobile_chat_middle", 1); } : footerAd ? () => { fireClick(footerAd, "mobile_chat_middle", 2); } : undefined}
                 isPremium={isPremium}
-                initialMessages={threadInitialMessages}
-                onMessagesChange={isPremium ? handleMessagesChange : undefined}
+                initialMessages={mobileInitialMessages}
+                onMessagesChange={handleMobileMessagesChange}
                 threads={threads}
                 activeThreadId={currentThreadId}
                 onSelectThread={handleSelectThread}
                 onNewChat={handleNewChat}
                 onDeleteThread={deleteThread}
+                onTogglePin={togglePin}
+                onRenameThread={renameThread}
                 groupedThreads={groupedThreads}
-                hasMore={hasMore}
-                isLoadingMore={isLoadingMore}
-                onLoadMore={loadMore}
-                searchThreads={searchThreads}
-                getThreadWithMessages={getThreadWithMessages}
               />
 
               {/* Mobile Annotations Drawer — bottom sheet */}

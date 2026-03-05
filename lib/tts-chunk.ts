@@ -165,7 +165,6 @@ export function computeChunkKeySync(
     return hasher.digest("hex");
   }
   // Node.js fallback
-  // eslint-disable-next-line @typescript-eslint/no-require-imports
   const { createHash } = require("crypto") as typeof import("crypto");
   return createHash("sha256").update(input).digest("hex");
 }

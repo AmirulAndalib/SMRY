@@ -15,7 +15,6 @@ import {
   Play,
   LoaderCircle,
 } from "@/components/ui/icons";
-import { Link } from "@/i18n/navigation";
 import { FeedbackIcon } from "@/components/ui/custom-icons";
 import { Kbd } from "@/components/ui/kbd";
 import ShareButton from "@/components/features/share-button";
@@ -102,10 +101,10 @@ function ToolbarButton({
           e.currentTarget.blur();
         }}
         className={cn(
-          "size-10 flex items-center justify-center rounded-lg transition-all duration-150",
+          "size-10 flex items-center justify-center rounded-lg transition-colors",
           "hover:bg-accent hover:text-accent-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          "active:scale-95",
+
           isActive
             ? "bg-primary/10 text-primary"
             : "text-muted-foreground",
@@ -166,10 +165,10 @@ function ViewModeSelector({
       {/* Active mode button */}
       <button
         className={cn(
-          "size-10 flex items-center justify-center rounded-lg transition-all duration-150",
+          "size-10 flex items-center justify-center rounded-lg transition-colors",
           "hover:bg-accent hover:text-accent-foreground",
           "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-          "active:scale-95",
+
           "text-muted-foreground"
         )}
         aria-label={`Current view: ${viewModeLabels[viewMode]}`}
@@ -183,7 +182,7 @@ function ViewModeSelector({
           className={cn(
             "absolute left-full ml-2 top-0 z-50",
             "flex flex-col gap-0.5 p-1 rounded-lg",
-            "bg-background/80 backdrop-blur-xl border border-border/50 shadow-lg",
+            "bg-background/80 backdrop-blur-xl border border-border/50 shadow-sm",
             "animate-in fade-in-0 slide-in-from-left-2 duration-150"
           )}
         >
@@ -199,10 +198,10 @@ function ViewModeSelector({
                   setHovered(false);
                 }}
                 className={cn(
-                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-all duration-150",
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md transition-colors",
                   "text-xs font-medium whitespace-nowrap",
                   "hover:bg-accent hover:text-accent-foreground",
-                  "active:scale-95",
+        
                   isActive
                     ? "bg-primary/10 text-primary"
                     : "text-muted-foreground"
@@ -238,6 +237,7 @@ interface FloatingToolbarProps {
   onTTSToggle?: () => void;
   isTTSActive?: boolean;
   isTTSLoading?: boolean;
+  onHistoryToggle?: () => void;
 }
 
 export function FloatingToolbar({
@@ -257,8 +257,8 @@ export function FloatingToolbar({
   onTTSToggle,
   isTTSActive,
   isTTSLoading,
+  onHistoryToggle,
 }: FloatingToolbarProps) {
-  const { track } = useAnalytics();
   const anyPanelOpen = !!(styleOptionsOpen || shareOpen);
 
   // Open original URL
@@ -289,7 +289,7 @@ export function FloatingToolbar({
     <div
       className={cn(
         "fixed z-40 hidden md:flex flex-col gap-1 p-1.5",
-        "bg-background/80 backdrop-blur-xl border border-border/50 rounded-xl shadow-lg",
+        "bg-background/80 backdrop-blur-xl border border-border/50 rounded-xl shadow-sm",
         "top-1/2 -translate-y-1/2 left-4"
       )}
     >
@@ -337,21 +337,21 @@ export function FloatingToolbar({
 
       <div className="h-px bg-border/50 my-1" />
 
-      {/* Reading History - direct link */}
-      <Tooltip label="Reading History" shortcut="H" disabled={anyPanelOpen}>
-        <Link
-          href="/history"
+      {/* Session History - toggles sidebar history view */}
+      <Tooltip label="Session History" shortcut="⇧H" disabled={anyPanelOpen}>
+        <button
+          onClick={() => onHistoryToggle?.()}
           className={cn(
-            "size-10 flex items-center justify-center rounded-lg transition-all duration-150",
+            "size-10 flex items-center justify-center rounded-lg transition-colors",
             "hover:bg-accent hover:text-accent-foreground",
             "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-            "active:scale-95",
+
             "text-muted-foreground"
           )}
-          aria-label="Reading History"
+          aria-label="Session History"
         >
           <History className="size-5" />
-        </Link>
+        </button>
       </Tooltip>
 
       <div className="h-px bg-border/50 my-1" />
@@ -387,10 +387,10 @@ export function FloatingToolbar({
                 <button
                   {...rest}
                   className={cn(
-                    "size-10 flex items-center justify-center rounded-lg transition-all duration-150",
+                    "size-10 flex items-center justify-center rounded-lg transition-colors",
                     "hover:bg-accent hover:text-accent-foreground",
                     "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
-                    "active:scale-95",
+          
                     "text-muted-foreground"
                   )}
                   aria-label="More options"
