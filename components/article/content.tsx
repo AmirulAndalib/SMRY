@@ -27,6 +27,7 @@ import { HighlightActionPopover } from "@/components/features/highlight-action-p
 import { useHighlightsContext } from "@/lib/contexts/highlights-context";
 import { useInlineHighlights } from "@/lib/hooks/use-inline-highlights";
 import { ImageLightbox, type LightboxImage } from "@/components/ui/image-lightbox";
+import { buildCopyAttribution, buildCopyUrl } from "@/lib/share-urls";
 
 export type { Source };
 
@@ -368,7 +369,7 @@ interface ArticleContentProps {
   footerAdPlacement?: string;
   onFooterAdVisible?: () => void;
   onFooterAdClick?: () => void;
-  // Ask AI - triggered from highlight toolbar
+  // Add to Assistant - triggered from highlight toolbar
   onAskAI?: (text: string) => void;
   // Open note editor for a specific highlight in the sidebar/drawer
   onOpenNoteEditor?: (id: string) => void;
@@ -501,6 +502,134 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
     return () => container.removeEventListener("click", handleClick);
     // highlights accessed via highlightsRef — no need as dep (advanced-event-handler-refs)
   }, [sanitizedArticleContent, isExpandable, setActiveHighlightId]);
+
+  // Copy attribution — append source link when copying text from article (Medium/Bloomberg-style).
+  // Includes a snippet URL with text fragment (#:~:text=) so the recipient
+  // lands on and sees the exact quoted text highlighted.
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container || !url) return;
+
+    const handleCopy = (e: ClipboardEvent) => {
+      const sel = window.getSelection();
+      if (!sel || sel.isCollapsed) return;
+
+      const selectedText = sel.toString().trim();
+      // Only append attribution for meaningful selections (not single words)
+      if (selectedText.length < 20) return;
+
+      const attribution = buildCopyAttribution(url, selectedText);
+      const copyUrl = buildCopyUrl(url, selectedText);
+
+      e.preventDefault();
+      e.clipboardData?.setData("text/plain", selectedText + attribution);
+      // Also set HTML version with a clickable link to the exact snippet
+      const fragment = sel.getRangeAt(0).cloneContents();
+      const wrapper = document.createElement("div");
+      wrapper.appendChild(fragment);
+      const htmlContent = wrapper.innerHTML || selectedText;
+      e.clipboardData?.setData(
+        "text/html",
+        `${htmlContent}<br><br><a href="${copyUrl}" style="color:#6366f1;text-decoration:none;font-size:13px;">Read more on smry.ai</a>`
+      );
+    };
+
+    container.addEventListener("copy", handleCopy);
+    return () => container.removeEventListener("copy", handleCopy);
+    // Re-run when sanitizedArticleContent changes so the handler attaches
+    // after the article content div actually mounts (contentRef is null during loading).
+  }, [url, sanitizedArticleContent]);
+
+  // Text Fragment fallback — for browsers that don't support #:~:text= (Safari, Firefox).
+  // Parses the fragment, finds the text in the article, scrolls to it, and temporarily highlights it.
+  useEffect(() => {
+    const container = contentRef.current;
+    if (!container || !sanitizedArticleContent) return;
+
+    const hash = window.location.hash;
+    if (!hash.includes(":~:text=")) return;
+
+    // Check if browser natively supports Text Fragments (Chrome/Edge handle it already)
+    if ("fragmentDirective" in document) return;
+
+    const textMatch = hash.match(/:~:text=([^&]*)/);
+    if (!textMatch) return;
+
+    const fragmentParts = textMatch[1].split(",").map(decodeURIComponent);
+    const searchStart = fragmentParts[0];
+    const searchEnd = fragmentParts[1]; // optional end for range selections
+
+    // Small delay to ensure content is fully rendered
+    const timeout = setTimeout(() => {
+      const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+      let node: Text | null;
+      let found = false;
+
+      while ((node = walker.nextNode() as Text | null)) {
+        const text = node.textContent || "";
+        const startIdx = text.indexOf(searchStart);
+        if (startIdx === -1) continue;
+
+        // If we have an end text and this is a range selection, validate end text exists later
+        if (searchEnd) {
+          // Look for end text in remaining content
+          let endNode: Text | null = node;
+          let endFound = false;
+          const endWalker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT);
+          // Advance to current node
+          while (endWalker.nextNode() !== node) { /* skip */ }
+          while ((endNode = endWalker.nextNode() as Text | null)) {
+            if ((endNode.textContent || "").includes(searchEnd)) {
+              endFound = true;
+              break;
+            }
+          }
+          if (!endFound && !text.includes(searchEnd)) continue;
+        }
+
+        // Scroll the text node's parent into view
+        const parent = node.parentElement;
+        if (parent) {
+          parent.scrollIntoView({ behavior: "smooth", block: "center" });
+          // Temporarily highlight using a mark element
+          const range = document.createRange();
+          range.setStart(node, startIdx);
+          range.setEnd(node, Math.min(startIdx + searchStart.length, text.length));
+          const mark = document.createElement("mark");
+          mark.style.backgroundColor = "rgba(168, 85, 247, 0.3)";
+          mark.style.borderRadius = "2px";
+          mark.setAttribute("data-snippet-highlight", "true");
+          try {
+            range.surroundContents(mark);
+            // Remove highlight after 5 seconds
+            setTimeout(() => {
+              const snapMark = container.querySelector("[data-snippet-highlight]");
+              if (snapMark?.parentNode) {
+                const frag = document.createDocumentFragment();
+                while (snapMark.firstChild) frag.appendChild(snapMark.firstChild);
+                snapMark.parentNode.replaceChild(frag, snapMark);
+              }
+            }, 5000);
+          } catch {
+            // surroundContents can fail if range spans multiple elements — just scroll
+          }
+          found = true;
+          break;
+        }
+      }
+
+      if (!found && searchStart) {
+        // Last resort: use window.find for basic text search (supported in Firefox/Safari)
+        try {
+          (window as any).find?.(searchStart);
+        } catch {
+          // Ignore
+        }
+      }
+    }, 500);
+
+    return () => clearTimeout(timeout);
+  }, [sanitizedArticleContent]);
 
   const debugContext = useMemo(() =>
     error instanceof ArticleFetchError ? error.debugContext : data?.debugContext,
@@ -899,6 +1028,7 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
                     onHighlight={addHighlight}
                     containerRef={contentRef}
                     onAskAI={onAskAI}
+                    articleUrl={url}
                   />
 
                   {/* Highlight action popover - appears on mark click */}
@@ -923,6 +1053,8 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
                         setClickedHighlight(null);
                         setActiveHighlightId(null);
                       }}
+                      articleUrl={url}
+                      onAskAI={onAskAI}
                     />
                   )}
 

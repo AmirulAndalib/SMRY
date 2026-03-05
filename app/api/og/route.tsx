@@ -11,12 +11,14 @@ export async function GET(request: NextRequest) {
   const url = searchParams.get("url");
   const titleParam = searchParams.get("title");
   const imageParam = searchParams.get("image");
+  const snippetParam = searchParams.get("snippet");
 
   // Default values
   let title = titleParam || "Read articles without paywalls";
   let siteName = "smry.ai";
   let hostname = "";
   let articleImage = imageParam || "";
+  let snippet = snippetParam || "";
 
   if (url) {
     try {
@@ -69,17 +71,25 @@ export async function GET(request: NextRequest) {
   // Strip characters that can't be rendered by Latin fonts (Inter/Syne).
   // Non-Latin chars (CJK, Arabic, Hebrew, etc.) cause "Cannot convert argument
   // to a ByteString" crash in ImageResponse. Replace them with a space.
-  // Exclude control chars (U+0000-U+001F), line/paragraph separators (U+2028-U+2029),
-  // and BOM (U+FEFF) which are known Satori crash vectors.
-  title = title
-    .replace(/[\u0000-\u001F\u2028\u2029\uFEFF]/g, '')
-    .replace(/[^\u0020-\u024F\u1E00-\u1EFF\u2010-\u2027\u2030-\u205E\u2070-\u209F\u20A0-\u20CF\u2100-\u214F]/g, ' ')
-    .replace(/\s{2,}/g, ' ')
-    .trim() || "Read articles without paywalls";
+  const sanitizeForSatori = (s: string, extended = false): string =>
+    s
+      .replace(/[\u0000-\u001F\u2028\u2029\uFEFF]/g, '')
+      .replace(
+        extended
+          ? /[^\u0020-\u024F\u1E00-\u1EFF\u2010-\u2027\u2030-\u205E\u2070-\u209F\u20A0-\u20CF\u2100-\u214F]/g
+          : /[^\u0020-\u024F\u1E00-\u1EFF\u2010-\u2027\u2030-\u205E]/g,
+        ' '
+      )
+      .replace(/\s{2,}/g, ' ')
+      .trim();
 
-  // Also sanitize siteName and hostname for the same reason
-  siteName = siteName.replace(/[\u0000-\u001F\u2028\u2029\uFEFF]/g, '').replace(/[^\u0020-\u024F\u1E00-\u1EFF\u2010-\u2027\u2030-\u205E]/g, ' ').replace(/\s{2,}/g, ' ').trim() || "smry.ai";
-  hostname = hostname.replace(/[\u0000-\u001F\u2028\u2029\uFEFF]/g, '').replace(/[^\u0020-\u024F\u1E00-\u1EFF\u2010-\u2027\u2030-\u205E]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+  title = sanitizeForSatori(title, true) || "Read articles without paywalls";
+  siteName = sanitizeForSatori(siteName) || "smry.ai";
+  hostname = sanitizeForSatori(hostname);
+  if (snippet) {
+    snippet = sanitizeForSatori(snippet, true);
+    if (snippet.length > 120) snippet = snippet.slice(0, 117) + "...";
+  }
 
   // Sanitize articleImage URL — non-ASCII chars in URLs crash ImageResponse
   // with "Cannot convert argument to a ByteString". Validate it's a proper http(s) URL
@@ -258,29 +268,82 @@ export async function GET(request: NextRequest) {
             </div>
           </div>
 
-          {/* Middle: Article title */}
+          {/* Middle: Article title + optional snippet quote */}
           <div
             style={{
               display: "flex",
               flexDirection: "column",
-              gap: "20px",
+              gap: snippet ? "12px" : "20px",
               flex: 1,
               justifyContent: "center",
               paddingRight: "40px",
+              overflow: "hidden",
             }}
           >
-            <div
-              style={{
-                fontFamily: "Inter",
-                fontSize: title.length > 60 ? 42 : 52,
-                fontWeight: 500,
-                color: "#fafafa",
-                lineHeight: 1.2,
-                letterSpacing: "-0.02em",
-              }}
-            >
-              {title}
-            </div>
+            {snippet ? (
+              <>
+                {/* Snippet quote */}
+                <div
+                  style={{
+                    display: "flex",
+                    gap: "14px",
+                    maxHeight: "280px",
+                    overflow: "hidden",
+                  }}
+                >
+                  <div
+                    style={{
+                      width: "4px",
+                      minHeight: "40px",
+                      backgroundColor: "#a78bfa",
+                      borderRadius: "4px",
+                      flexShrink: 0,
+                    }}
+                  />
+                  <div
+                    style={{
+                      fontFamily: "Inter",
+                      fontSize: snippet.length > 60 ? 26 : 32,
+                      fontWeight: 400,
+                      color: "#e4e4e7",
+                      lineHeight: 1.35,
+                      fontStyle: "italic",
+                      overflow: "hidden",
+                    }}
+                  >
+                    {"\u201C"}{snippet}{"\u201D"}
+                  </div>
+                </div>
+                {/* Article title below the quote */}
+                <div
+                  style={{
+                    fontFamily: "Inter",
+                    fontSize: 20,
+                    fontWeight: 500,
+                    color: "#71717a",
+                    lineHeight: 1.3,
+                    overflow: "hidden",
+                    maxHeight: "52px",
+                  }}
+                >
+                  {title}
+                </div>
+              </>
+            ) : (
+              <div
+                style={{
+                  fontFamily: "Inter",
+                  fontSize: title.length > 60 ? 42 : 52,
+                  fontWeight: 500,
+                  color: "#fafafa",
+                  lineHeight: 1.2,
+                  letterSpacing: "-0.02em",
+                  overflow: "hidden",
+                }}
+              >
+                {title}
+              </div>
+            )}
           </div>
 
           {/* Bottom: Source info */}

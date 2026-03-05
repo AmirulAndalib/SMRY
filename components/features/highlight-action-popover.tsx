@@ -1,11 +1,17 @@
 "use client";
 
-import React, { useCallback } from "react";
-import { Copy, StickyNote, Trash2, X } from "@/components/ui/icons";
+import React from "react";
+import { X } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
 import { HighlightPopover, HIGHLIGHT_COLORS } from "@/components/features/highlight-popover";
 import type { Highlight } from "@/lib/hooks/use-highlights";
-import { toast } from "sonner";
+import {
+  CopyAction,
+  NoteAction,
+  ShareAction,
+  AssistantAction,
+  DeleteAction,
+} from "@/components/features/highlight-actions";
 
 interface HighlightActionPopoverProps {
   highlight: Highlight;
@@ -14,6 +20,8 @@ interface HighlightActionPopoverProps {
   onAddNote: (id: string) => void;
   onDelete: (id: string) => void;
   onClose: () => void;
+  articleUrl?: string;
+  onAskAI?: (text: string) => void;
 }
 
 export function HighlightActionPopover({
@@ -23,17 +31,9 @@ export function HighlightActionPopover({
   onAddNote,
   onDelete,
   onClose,
+  articleUrl,
+  onAskAI,
 }: HighlightActionPopoverProps) {
-  const handleCopy = useCallback(async () => {
-    try {
-      await navigator.clipboard.writeText(highlight.text);
-      toast.success("Copied to clipboard");
-    } catch {
-      toast.error("Failed to copy");
-    }
-    onClose();
-  }, [highlight.text, onClose]);
-
   return (
     <HighlightPopover anchorRect={anchorRect} onClose={onClose} deferOutsideClick>
       <div className="bg-popover border border-border rounded-2xl shadow-2xl w-56 overflow-hidden">
@@ -60,42 +60,23 @@ export function HighlightActionPopover({
           })}
         </div>
 
-        {/* Divider */}
         <div className="mx-3 border-t border-border/50" />
 
-        {/* Actions */}
         <div className="py-1.5">
-          <button
-            onClick={handleCopy}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-popover-foreground hover:bg-foreground/10 transition-colors"
-          >
-            <Copy className="size-5 text-muted-foreground" />
-            <span>Copy</span>
-          </button>
+          <CopyAction text={highlight.text} articleUrl={articleUrl} />
 
-          <button
+          <NoteAction
             onClick={() => {
               onAddNote(highlight.id);
-              // Don't call onClose() here — it would set activeHighlightId to null,
+              // Don't call onClose() — it would set activeHighlightId to null,
               // overriding the setActiveHighlightId(id) from onAddNote (React batches both).
-              // The popover will dismiss naturally since clickedHighlight is cleared by onAddNote.
             }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-popover-foreground hover:bg-foreground/10 transition-colors"
-          >
-            <StickyNote className="size-5 text-muted-foreground" />
-            <span>Add a Note</span>
-          </button>
+          />
 
-          <button
-            onClick={() => {
-              onDelete(highlight.id);
-              onClose();
-            }}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-400 hover:bg-foreground/10 transition-colors"
-          >
-            <Trash2 className="size-5" />
-            <span>Delete</span>
-          </button>
+          <ShareAction text={highlight.text} articleUrl={articleUrl} onDone={onClose} />
+          <AssistantAction text={highlight.text} onAskAI={onAskAI} onDone={onClose} />
+
+          <DeleteAction onClick={() => { onDelete(highlight.id); onClose(); }} />
         </div>
       </div>
     </HighlightPopover>

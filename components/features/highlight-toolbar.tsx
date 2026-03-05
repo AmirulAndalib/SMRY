@@ -1,12 +1,16 @@
 "use client";
 
 import React, { useState, useEffect, useCallback, useRef } from "react";
-import { Copy, StickyNote, AiMagic, Check } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
-import { toast } from "sonner";
 import { HighlightPopover, HIGHLIGHT_COLORS } from "@/components/features/highlight-popover";
 import type { Highlight } from "@/lib/hooks/use-highlights";
 import { useAnalytics } from "@/lib/hooks/use-analytics";
+import {
+  CopyAction,
+  NoteAction,
+  ShareAction,
+  AssistantAction,
+} from "@/components/features/highlight-actions";
 
 // Re-export for consumers that import from here
 export { HIGHLIGHT_COLORS };
@@ -15,9 +19,11 @@ interface HighlightToolbarProps {
   onHighlight: (highlight: Omit<Highlight, "id" | "createdAt">) => void;
   containerRef: React.RefObject<HTMLElement | null>;
   onAskAI?: (text: string) => void;
+  /** Original article URL for share snippet + copy attribution */
+  articleUrl?: string;
 }
 
-export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: HighlightToolbarProps) {
+export function HighlightToolbar({ onHighlight, containerRef, onAskAI, articleUrl }: HighlightToolbarProps) {
   const [selection, setSelection] = useState<{
     text: string;
     range: Range;
@@ -26,15 +32,20 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
   const [showNoteInput, setShowNoteInput] = useState(false);
   const [note, setNote] = useState("");
   const [selectedColor, setSelectedColor] = useState<Highlight["color"]>("yellow");
-  const [copied, setCopied] = useState(false);
   const noteInputRef = useRef<HTMLTextAreaElement>(null);
   const lastSelectedTextRef = useRef("");
   const { track } = useAnalytics();
   const selectionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Debounced selection change handler
+  // Debounced selection change handler.
+  // Clearing uses a longer debounce (300ms) so the toolbar survives mobile tap
+  // interactions: touchstart clears the browser selection → selectionchange fires →
+  // but click fires within ~100ms and needs the toolbar to still be mounted.
   const handleSelectionChange = useCallback(() => {
     if (selectionTimerRef.current) clearTimeout(selectionTimerRef.current);
+
+    const currentSel = window.getSelection();
+    const isClearing = !currentSel || currentSel.isCollapsed || !currentSel.rangeCount;
 
     selectionTimerRef.current = setTimeout(() => {
       selectionTimerRef.current = null;
@@ -63,10 +74,26 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
         return;
       }
 
-      setSelection({ text, range, rect: range.getBoundingClientRect() });
+      // For large multi-paragraph selections, anchor the toolbar at the
+      // focus point (cursor end) so it appears near the user's cursor/finger
+      // instead of off-screen above the selection start.
+      let rect = range.getBoundingClientRect();
+      if (rect.height > 100 && sel.focusNode) {
+        try {
+          const caretRange = document.createRange();
+          caretRange.setStart(sel.focusNode, sel.focusOffset);
+          caretRange.collapse(true);
+          const caretRect = caretRange.getBoundingClientRect();
+          if (caretRect.top > 0 && caretRect.left > 0) {
+            rect = caretRect;
+          }
+        } catch { /* fallback to full range rect */ }
+      }
+
+      setSelection({ text, range, rect });
       setShowNoteInput(false);
       setNote("");
-    }, 50);
+    }, isClearing ? 300 : 50);
   }, [containerRef, showNoteInput]);
 
   useEffect(() => {
@@ -113,18 +140,6 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
     [selection, note, onHighlight, track]
   );
 
-  const handleCopy = useCallback(async () => {
-    if (!selection) return;
-    try {
-      await navigator.clipboard.writeText(selection.text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-      toast.success("Copied to clipboard");
-    } catch {
-      toast.error("Failed to copy");
-    }
-  }, [selection]);
-
   const handleAskAI = useCallback(() => {
     if (!selection) return;
     onAskAI?.(selection.text);
@@ -154,10 +169,8 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
               onClick={() => {
                 const colorName = color.name as Highlight["color"];
                 if (showNoteInput) {
-                  // When note input is open, just select the color
                   setSelectedColor(colorName);
                 } else {
-                  // Instant highlight on color click
                   highlightWithColor(colorName);
                 }
               }}
@@ -171,43 +184,14 @@ export function HighlightToolbar({ onHighlight, containerRef, onAskAI }: Highlig
           ))}
         </div>
 
-        {/* Divider */}
         <div className="mx-3 border-t border-border/50" />
 
-        {/* Actions */}
+        {/* Actions — shared components eliminate duplication */}
         <div className="py-1.5">
-          <button
-            onClick={handleCopy}
-            className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-popover-foreground hover:bg-foreground/10 transition-colors"
-          >
-            {copied ? (
-              <Check className="size-5 text-green-400" />
-            ) : (
-              <Copy className="size-5 text-muted-foreground" />
-            )}
-            <span>{copied ? "Copied" : "Copy"}</span>
-          </button>
-
-          <button
-            onClick={() => setShowNoteInput(!showNoteInput)}
-            className={cn(
-              "w-full flex items-center gap-3 px-4 py-2.5 text-sm text-popover-foreground hover:bg-foreground/10 transition-colors",
-              showNoteInput && "bg-foreground/10"
-            )}
-          >
-            <StickyNote className="size-5 text-muted-foreground" />
-            <span>Add a Note</span>
-          </button>
-
-          {onAskAI && (
-            <button
-              onClick={handleAskAI}
-              className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-popover-foreground hover:bg-foreground/10 transition-colors"
-            >
-              <AiMagic className="size-5 text-muted-foreground" />
-              <span>Ask AI</span>
-            </button>
-          )}
+          <CopyAction text={selection.text} articleUrl={articleUrl} />
+          <NoteAction onClick={() => setShowNoteInput(!showNoteInput)} active={showNoteInput} />
+          <ShareAction text={selection.text} articleUrl={articleUrl} />
+          <AssistantAction text={selection.text} onAskAI={onAskAI} onDone={handleAskAI} />
         </div>
       </div>
 

@@ -9,6 +9,24 @@ const MARK_COLOR_ATTR = "data-highlight-color";
 const MARK_ACTIVE_ATTR = "data-highlight-active";
 const MARK_PULSE_ATTR = "data-highlight-pulse";
 
+/** Block-level HTML tag names — used to detect paragraph boundaries in the charmap. */
+const BLOCK_TAGS = new Set([
+  'P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI',
+  'BLOCKQUOTE', 'PRE', 'TABLE', 'TR', 'TD', 'TH',
+  'SECTION', 'ARTICLE', 'ASIDE', 'HEADER', 'FOOTER',
+  'DL', 'DT', 'DD', 'FIGURE', 'FIGCAPTION',
+]);
+
+/** Walk up from a node to find its nearest block-level ancestor element. */
+function getBlockAncestor(node: Node): Element | null {
+  let el = node.parentElement;
+  while (el) {
+    if (BLOCK_TAGS.has(el.tagName)) return el;
+    el = el.parentElement;
+  }
+  return null;
+}
+
 /** One entry per text node (typically 100-500 per article, not per character) */
 interface TextNodeEntry {
   node: Text;
@@ -43,12 +61,24 @@ function buildCharMap(container: HTMLElement): CharMap {
   const entries: TextNodeEntry[] = [];
   let fullText = "";
   let node: Text | null;
+  let prevTextNode: Text | null = null;
 
   while ((node = walker.nextNode() as Text | null)) {
     const text = node.textContent || "";
     if (text.length > 0) {
+      // Insert a separator between text nodes in different block-level parents.
+      // Selection.toString() adds newlines between block elements, so without
+      // this separator cross-paragraph selections can't be matched in the charmap.
+      if (prevTextNode && fullText.length > 0 && !/\s/.test(fullText[fullText.length - 1])) {
+        const prevBlock = getBlockAncestor(prevTextNode);
+        const currBlock = getBlockAncestor(node);
+        if (prevBlock !== currBlock) {
+          fullText += "\n";
+        }
+      }
       entries.push({ node, start: fullText.length, length: text.length });
       fullText += text;
+      prevTextNode = node;
     }
   }
 

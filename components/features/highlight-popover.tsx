@@ -55,11 +55,17 @@ export function HighlightPopover({
     return () => document.removeEventListener("keydown", handleKey);
   }, [onClose]);
 
-  // Close on scroll — fixed positioning drifts when content scrolls
+  // Close on scroll — fixed positioning drifts when content scrolls.
+  // Grace period prevents immediate close when user scrolls to reach the toolbar.
   useEffect(() => {
-    const handleScroll = () => onClose();
+    let armed = false;
+    const armTimer = setTimeout(() => { armed = true; }, 300);
+    const handleScroll = () => { if (armed) onClose(); };
     window.addEventListener("scroll", handleScroll, { capture: true, passive: true });
-    return () => window.removeEventListener("scroll", handleScroll, { capture: true });
+    return () => {
+      clearTimeout(armTimer);
+      window.removeEventListener("scroll", handleScroll, { capture: true });
+    };
   }, [onClose]);
 
   const style: React.CSSProperties = {
@@ -75,6 +81,13 @@ export function HighlightPopover({
       ref={popoverRef}
       style={style}
       className="animate-in fade-in zoom-in-95 duration-150"
+      onMouseDown={(e) => {
+        // Prevent browser from clearing the text selection when clicking toolbar buttons.
+        // Allow focus on form controls (textarea for notes).
+        if (!(e.target instanceof HTMLTextAreaElement || e.target instanceof HTMLInputElement)) {
+          e.preventDefault();
+        }
+      }}
     >
       {children}
     </div>,

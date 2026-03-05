@@ -678,15 +678,15 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
             </div>
           )}
 
-          {/* Quoted text block - shown when Ask AI is used from highlight toolbar */}
+          {/* Quoted text block - shown when Add to Assistant is used from highlight toolbar */}
           {quotedText && (
-            <div className="flex items-center gap-2.5 rounded-full border border-border/70 bg-muted/40 pl-3.5 pr-2 py-2 mb-2">
-              <CornerDownRight className="size-4 text-muted-foreground/60 shrink-0" />
-              <p className="flex-1 text-[13px] text-foreground/80 truncate">&ldquo;{quotedText}&rdquo;</p>
+            <div className="flex items-start gap-2.5 rounded-xl border border-border/70 bg-muted/40 pl-3.5 pr-2 py-2.5 mb-2">
+              <CornerDownRight className="size-4 text-muted-foreground/60 shrink-0 mt-0.5" />
+              <p className="flex-1 text-[13px] text-foreground/80 leading-relaxed">&ldquo;{quotedText}&rdquo;</p>
               <button
                 type="button"
                 onClick={() => setQuotedText(null)}
-                className="shrink-0 flex size-7 items-center justify-center rounded-full text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors"
+                className="shrink-0 flex size-7 items-center justify-center rounded-full text-muted-foreground/50 hover:text-foreground hover:bg-muted/60 transition-colors mt-[-2px]"
                 style={{ touchAction: "manipulation" }}
                 aria-label="Dismiss quote"
               >

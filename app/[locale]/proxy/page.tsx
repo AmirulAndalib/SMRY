@@ -6,7 +6,7 @@ import { headers } from 'next/headers';
 
 type Props = {
   params: Promise<{ locale: string }>;
-  searchParams: Promise<{ url?: string }>;
+  searchParams: Promise<{ url?: string; snippet?: string }>;
 };
 
 // Base URL for OG images - always use production URL for social sharing
@@ -40,7 +40,7 @@ const DEFAULT_METADATA: Metadata = {
 // Generate dynamic metadata for OG tags
 // OG images are generated via /api/og route handler (supports query params)
 export async function generateMetadata({ searchParams }: Props): Promise<Metadata> {
-  const { url: rawUrl } = await searchParams;
+  const { url: rawUrl, snippet } = await searchParams;
 
   if (!rawUrl) {
     return DEFAULT_METADATA;
@@ -84,10 +84,12 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
       console.log(`[metadata] meta hit hostname=${hostname} source=${data.source} duration=${Date.now() - metaStart}ms`);
 
       const title = meta.title ? `${meta.title} | Smry` : `Article from ${hostname} | Smry`;
-      const description = `Read this article from ${meta.siteName || hostname} with Smry`;
+      const description = snippet
+        ? `"${snippet}" — from ${meta.siteName || hostname} on Smry`
+        : `Read this article from ${meta.siteName || hostname} with Smry`;
 
       // Include title and image in OG image URL for faster rendering (avoids extra API call in OG route)
-      const ogImageWithTitle = `${OG_BASE_URL}/api/og?url=${encodeURIComponent(normalizedUrl)}&title=${encodeURIComponent(meta.title || '')}${meta.image ? `&image=${encodeURIComponent(meta.image)}` : ''}`;
+      const ogImageWithTitle = `${OG_BASE_URL}/api/og?url=${encodeURIComponent(normalizedUrl)}&title=${encodeURIComponent(meta.title || '')}${meta.image ? `&image=${encodeURIComponent(meta.image)}` : ''}${snippet ? `&snippet=${encodeURIComponent(snippet)}` : ''}`;
 
       return {
         title,
@@ -122,18 +124,24 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
   // No cached metadata (article never fetched) or meta endpoint failed — use hostname defaults.
   // Do NOT fall back to /api/article/auto — the page component already fetches the article.
   console.log(`[metadata] using hostname fallback hostname=${hostname}`);
+  const fallbackDescription = snippet
+    ? `"${snippet}" — from ${hostname} on Smry`
+    : `Read this article from ${hostname} with Smry`;
+  const fallbackOgImageUrl = snippet
+    ? `${ogImageUrl}&snippet=${encodeURIComponent(snippet)}`
+    : ogImageUrl;
   return {
     title: `Article from ${hostname} | Smry`,
-    description: `Read this article from ${hostname} with Smry`,
+    description: fallbackDescription,
     robots: { index: false, follow: true },
     openGraph: {
       type: 'article',
       title: `Article from ${hostname}`,
-      description: `Read this article from ${hostname} with Smry`,
+      description: fallbackDescription,
       siteName: 'smry.ai',
       url: canonicalUrl,
       images: [{
-        url: ogImageUrl,
+        url: fallbackOgImageUrl,
         width: 1200,
         height: 630,
         alt: `Article from ${hostname} on Smry`,
@@ -142,8 +150,8 @@ export async function generateMetadata({ searchParams }: Props): Promise<Metadat
     twitter: {
       card: 'summary_large_image',
       title: `Article from ${hostname}`,
-      description: `Read this article from ${hostname} with Smry`,
-      images: [ogImageUrl],
+      description: fallbackDescription,
+      images: [fallbackOgImageUrl],
     },
   };
 }
