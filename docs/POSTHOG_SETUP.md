@@ -40,7 +40,7 @@ bun dev
 1. Open the app in your browser
 2. Open DevTools -> Network tab -> filter by `posthog`
 3. You should see batch requests to `i.posthog.com`
-4. In PostHog: **Activity -> Live Events** — you should see `$pageview` events
+4. In PostHog: **Activity -> Live Events** — you should see `article_loaded` events (note: `$pageview` is disabled, DataBuddy handles visitor tracking)
 
 ---
 

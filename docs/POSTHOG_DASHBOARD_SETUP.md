@@ -204,7 +204,7 @@ Example insight: "nytimes.com has 95% success rate, avg latency 2.3s, winning so
 4. Date range: **Last 7 days**
 5. **Save** → name: `Clicks by Placement` → add to `Ad Clicks`
 
-This tells you which ad slots (top, middle, bottom, sidebar) get the most clicks. Optimize accordingly.
+This tells you which ad slots get the most clicks. Placement values are snake_case: `homepage`, `article_sidebar`, `article_inline`, `article_footer`, `chat_top`, `chat_middle`, `chat_input`, `mobile_article_bottom`, `mobile_chat_top`, `mobile_chat_middle`.
 
 ### Step 3 — "Clicks by Provider"
 

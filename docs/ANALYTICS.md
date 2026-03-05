@@ -2,7 +2,7 @@
 
 Complete reference for all analytics events, setup, and dashboards.
 
-**Last updated: March 2026** (lean implementation — 7 custom events + heatmaps, client-side only)
+**Last updated: March 2026** (lean implementation — 11 custom events + heatmaps, client-side only)
 
 ---
 
@@ -144,20 +144,20 @@ Fires when ALL sources fail for a URL.
 
 `ad_impression` is NOT tracked in PostHog — impression billing is handled directly by Gravity/ZeroClick SDKs via `fireImpression()`. Only clicks matter for placement optimization.
 
-**Ad Placements:**
+**Ad Placements** (snake_case per PostHog convention):
 
 | Placement | Location |
 |-----------|----------|
-| `Homepage` | Landing page |
-| `Article - Inline` | Mid-article |
-| `Article - Footer` | End of article |
-| `Article - Sidebar` | Desktop right sidebar |
-| `Chat - Top` | Above chat messages (desktop) |
-| `Chat - Middle` | Between chat messages (desktop) |
-| `Chat - Input` | Above prompt input (desktop) |
-| `Mobile - Article Bottom` | Fixed bottom bar on mobile article |
-| `Mobile - Chat Top` | Chat header on mobile |
-| `Mobile - Chat Middle` | Between chat messages on mobile |
+| `homepage` | Landing page |
+| `article_inline` | Mid-article |
+| `article_footer` | End of article |
+| `article_sidebar` | Desktop right sidebar |
+| `chat_top` | Above chat messages (desktop) |
+| `chat_middle` | Between chat messages (desktop) |
+| `chat_input` | Above prompt input (desktop) |
+| `mobile_article_bottom` | Fixed bottom bar on mobile article |
+| `mobile_chat_top` | Chat header on mobile |
+| `mobile_chat_middle` | Between chat messages on mobile |
 
 ### Feature Adoption
 
