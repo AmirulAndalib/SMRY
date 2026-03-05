@@ -597,7 +597,7 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
               </div>
             )}
             <div ref={messagesEndRef} data-messages-end />
-            {floatingInput && <div className={headerAd && !headerAdDismissed ? "h-16" : "h-8"} aria-hidden="true" />}
+            {floatingInput && <div className={headerAd && !headerAdDismissed ? "h-20" : "h-8"} aria-hidden="true" />}
           </div>
         )}
         </div>

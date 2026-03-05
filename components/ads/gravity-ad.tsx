@@ -132,9 +132,9 @@ export function GravityAd({ ad, placement, onVisible, onDismiss, onClick, classN
   const { track } = useAnalytics();
 
   const handleClick = useCallback(() => {
-    track("ad_click", { placement, ad_provider: ad.ad_provider });
+    track("ad_click", { placement, ad_provider: ad.ad_provider, brand_name: ad.brandName });
     onClick?.();
-  }, [track, placement, ad.ad_provider, onClick]);
+  }, [track, placement, ad.ad_provider, ad.brandName, onClick]);
 
   // Reset on ad change
   useLayoutEffect(() => {
@@ -142,9 +142,7 @@ export function GravityAd({ ad, placement, onVisible, onDismiss, onClick, classN
     setHasTrackedImpression(false);
   }, [ad.impUrl]);
 
-  // Impression tracking - useLayoutEffect ensures ref is available after DOM mount
-  // Uses adWrapperRef (for inline-chat which has separate mobile/desktop elements)
-  // or adRef (for all other single-element variants).
+  // Impression tracking - Gravity billing only (business logic via /api/px)
   useLayoutEffect(() => {
     if (hasTrackedImpression) return;
 
@@ -169,38 +167,40 @@ export function GravityAd({ ad, placement, onVisible, onDismiss, onClick, classN
   const ctaText = ad.cta || "Learn more";
 
   // ============================================
-  // MOBILE VARIANT - Clean, minimal, no button
+  // MOBILE VARIANT - Full-width clickable card
   // ============================================
   if (variant === "mobile") {
     return (
-      <a
-        ref={adRef}
-        href={ad.clickUrl}
-        target="_blank"
-        rel="sponsored noopener"
-        onClick={handleClick}
-        className={cn(
-          "flex items-center gap-3 bg-card",
-          "px-3 py-2.5",
-          "sm:px-4",
-          "md:mx-3 md:mb-2 md:rounded-lg md:border md:shadow-sm",
-          "group",
-          className
+      <div className={cn("relative bg-card border-t border-border/30", className)}>
+        <a
+          ref={adRef}
+          href={ad.clickUrl}
+          target="_blank"
+          rel="sponsored noopener"
+          onClick={handleClick}
+          className={cn(
+            "flex items-center gap-3 px-3.5 py-3 pr-12 group",
+            "active:bg-muted/30 transition-colors"
+          )}
+        >
+          <div className="size-10 rounded-xl overflow-hidden bg-white shrink-0 ring-1 ring-border/20 shadow-sm">
+            <AdFavicon src={ad.favicon} fallbackUrl={ad.url} brandName={ad.brandName} size={40} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <p className="text-[14px] font-medium text-foreground leading-snug line-clamp-1 group-active:text-primary transition-colors">
+              {valueProp}
+            </p>
+            <p className="text-[12px] text-muted-foreground/50 mt-0.5">
+              {ad.brandName} · Ad
+            </p>
+          </div>
+        </a>
+        {onDismiss && (
+          <div className="absolute right-2 top-1/2 -translate-y-1/2">
+            <DismissButton onDismiss={onDismiss} className="size-7" />
+          </div>
         )}
-      >
-        <div className="size-8 rounded-lg overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
-          <AdFavicon src={ad.favicon} fallbackUrl={ad.url} brandName={ad.brandName} size={32} />
-        </div>
-        <div className="flex-1 min-w-0">
-          <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-2 group-hover:text-primary transition-colors">
-            {valueProp}
-          </p>
-          <p className="text-[11px] text-muted-foreground/50 mt-0.5">
-            {ad.brandName} · Ad
-          </p>
-        </div>
-        <DismissButton onDismiss={onDismiss} />
-      </a>
+      </div>
     );
   }
 
@@ -330,31 +330,35 @@ export function GravityAd({ ad, placement, onVisible, onDismiss, onClick, classN
   }
 
   // ============================================
-  // CHAT-PROMPT VARIANT - Minimal native ad above chat input
-  // Designed to feel like a subtle suggestion, not a card
+  // CHAT-PROMPT VARIANT - Native ad above chat input
+  // Entire card is clickable for better CTR
   // ============================================
   if (variant === "chat-prompt") {
     return (
-      <div className={cn("flex items-center gap-2 px-1 py-1", className)}>
+      <div className={cn("relative group rounded-xl border border-border/30 bg-muted/15 hover:bg-muted/30 transition-colors overflow-hidden", className)}>
         <a
           ref={adRef}
           href={ad.clickUrl}
           target="_blank"
           rel="sponsored noopener"
           onClick={handleClick}
-          className="flex-1 flex items-center gap-2 min-w-0 group rounded-lg px-2 py-1.5 -mx-1 hover:bg-muted/40 transition-colors"
+          className="flex items-center gap-2.5 px-3 py-2.5 pr-16 min-w-0"
         >
-          <div className="size-6 rounded-md overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
-            <AdFavicon src={ad.favicon} fallbackUrl={ad.url} brandName={ad.brandName} size={24} />
+          <div className="size-8 rounded-lg overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
+            <AdFavicon src={ad.favicon} fallbackUrl={ad.url} brandName={ad.brandName} size={32} />
           </div>
-          <p className="flex-1 min-w-0 text-[12px] text-muted-foreground/70 leading-snug line-clamp-1 group-hover:text-muted-foreground transition-colors">
-            <span className="font-medium text-foreground/60 group-hover:text-foreground/80">{ad.brandName}</span>
-            <span className="text-muted-foreground/30"> · </span>
-            {valueProp}
-          </p>
+          <div className="flex-1 min-w-0">
+            <p className="text-[13px] font-medium text-foreground leading-snug line-clamp-1 group-hover:text-primary transition-colors">
+              {valueProp}
+            </p>
+            <p className="text-[11px] text-muted-foreground/50 mt-0.5">
+              {ad.brandName} · Ad
+            </p>
+          </div>
         </a>
-        <span className="shrink-0 text-[10px] text-muted-foreground/30">Ad</span>
-        <DismissButton onDismiss={onDismiss} className="size-5" />
+        <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <DismissButton onDismiss={onDismiss} className="size-6" />
+        </div>
       </div>
     );
   }
