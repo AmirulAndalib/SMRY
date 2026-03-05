@@ -38,6 +38,10 @@ Complete reference for all analytics events, setup, and dashboards.
 | `components/features/article-chat.tsx` | `chat_message_sent` |
 | `components/features/share-button.tsx` | `article_shared` |
 | `components/features/highlight-toolbar.tsx` | `highlight_created` |
+| `components/shared/mode-toggle.tsx` | `theme_changed` |
+| `components/features/floating-toolbar.tsx` | `view_mode_changed`, `toolbar_click` |
+| `components/features/annotation-card.tsx` | `annotation_action` (edit_note, delete) |
+| `components/features/export-highlights.tsx` | `annotation_action` (export) |
 
 ---
 
@@ -77,7 +81,7 @@ Initialized in `components/providers/posthog-provider.tsx`:
 
 ---
 
-## All Custom Events (7 total)
+## All Custom Events (11 total)
 
 ```typescript
 export type AnalyticsEvent =
@@ -90,7 +94,11 @@ export type AnalyticsEvent =
   | "chat_message_sent"
   | "article_shared"
   | "highlight_created"
-  | "tts_requested";
+  | "tts_requested"
+  | "theme_changed"        // user switches theme
+  | "view_mode_changed"    // user switches reader/original/iframe
+  | "toolbar_click"        // floating sidebar button clicked
+  | "annotation_action";   // highlight edit, delete, export
 ```
 
 Every event is automatically enriched with: `is_premium`, `device_type`, `locale`.
@@ -114,7 +122,7 @@ The most important event. Carries all the data for hostname reliability, source 
 | `classification_confidence` | number | 0-1 |
 | `selection_reason` | string | `classifier_decided` / `single_source` / `fallback_length_reliability` |
 | `sources_succeeded` | number | How many of the 3 sources returned content (0-3) |
-| `sources_failed` | string[] | Which sources failed (e.g., `["smry-slow", "wayback"]`) |
+| `sources_failed` | string | Comma-separated list of failed sources (e.g., `"smry-slow,wayback"`). Empty string means no failures. |
 | `fetch_ms` | number | Total fetch time in ms (all 3 sources, parallel) |
 
 ### Core — `article_error`
@@ -140,16 +148,16 @@ Fires when ALL sources fail for a URL.
 
 | Placement | Location |
 |-----------|----------|
-| `sidebar` | Fixed bottom-right (desktop) |
-| `inline` | Mid-article |
-| `footer` | End of article |
-| `chat_header` | Top of chat panel |
-| `chat_inline` | Inside chat panel |
-| `micro` | Below chat input |
-| `mobile_bottom` | Fixed above bottom bar (mobile) |
-| `mobile_chat_header` | Chat header (mobile) |
-| `mobile_chat_inline` | Inside mobile chat |
-| `home` | Home page |
+| `Homepage` | Landing page |
+| `Article - Inline` | Mid-article |
+| `Article - Footer` | End of article |
+| `Article - Sidebar` | Desktop right sidebar |
+| `Chat - Top` | Above chat messages (desktop) |
+| `Chat - Middle` | Between chat messages (desktop) |
+| `Chat - Input` | Above prompt input (desktop) |
+| `Mobile - Article Bottom` | Fixed bottom bar on mobile article |
+| `Mobile - Chat Top` | Chat header on mobile |
+| `Mobile - Chat Middle` | Between chat messages on mobile |
 
 ### Feature Adoption
 
@@ -159,19 +167,23 @@ Fires when ALL sources fail for a URL.
 | `article_shared` | Any share action | `method`: `copy_link` / `native` / `x_twitter` / `linkedin` / `reddit` |
 | `highlight_created` | Text highlighted | `text_length`, `color` |
 | `tts_requested` | TTS load button | `voice`, `article_url` |
+| `theme_changed` | User switches theme | `theme` (e.g., `light`, `dark`, `magic-blue`) |
+| `view_mode_changed` | User switches view mode | `view_mode` (`markdown` / `html` / `iframe`) |
+| `toolbar_click` | Floating toolbar button clicked | `action` (`open_original` / `listen` / `history` / `reader_settings` / `settings`) |
+| `annotation_action` | Highlight edit, delete, export | `action` (`edit_note` / `delete` / `export`), `highlight_count` (export only) |
 
 ---
 
 ## Event Volume & Cost (30K DAU)
 
-7 custom events + heatmaps (no $pageview, no $pageleave, no ad_impression):
+11 custom events + heatmaps (no $pageview, no $pageleave, no ad_impression):
 
 | Event | Est. per session | Daily (30K DAU, 1.5 sessions) |
 |-------|-----------------|-------------------------------|
 | `article_loaded` | 1 | 45,000 |
 | `article_error` | 0.05 | 2,250 |
 | `ad_click` | 0.05 | 2,250 |
-| Feature events (4) | 0.2 | 9,000 |
+| Feature events (8) | 0.4 | 18,000 |
 | Heatmap data | ~1-2 | ~67,500 |
 | **Total** | **~3** | **~126,000/day** |
 
@@ -210,7 +222,7 @@ The article extraction pipeline fetches from 3 sources in parallel:
 
 Each `article_loaded` event includes:
 - `sources_succeeded` — count of sources that returned content
-- `sources_failed` — array of source names that failed
+- `sources_failed` — comma-separated string of source names that failed (empty string = none)
 - `fetch_ms` — total fetch time (all sources, parallel)
 - `hostname` — article domain (for per-site breakdown)
 

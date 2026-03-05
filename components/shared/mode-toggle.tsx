@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/menu";
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAnalytics } from "@/lib/hooks/use-analytics";
 
 interface ThemeOption {
   id: string;
@@ -47,6 +48,7 @@ function ThemeSwatch({ theme }: { theme: ThemeOption }) {
 
 export function ModeToggle() {
   const { theme, setTheme, resolvedTheme } = useTheme();
+  const { track } = useAnalytics();
   const [mounted, setMounted] = React.useState(false);
 
   React.useEffect(() => {
@@ -76,7 +78,7 @@ export function ModeToggle() {
         {themes.map((t) => (
           <DropdownMenuItem
             key={t.id}
-            onClick={() => setTheme(t.id)}
+            onClick={() => { setTheme(t.id); track("theme_changed", { theme: t.id }); }}
             className="flex items-center gap-2"
           >
             <ThemeSwatch theme={t} />

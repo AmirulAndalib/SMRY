@@ -2,7 +2,7 @@
 
 Complete step-by-step guide to create all PostHog dashboards for SMRY.
 
-**Current events:** 7 custom events + heatmaps (no $pageview — DataBuddy handles visitors).
+**Current events:** 11 custom events + heatmaps (no $pageview — DataBuddy handles visitors).
 
 **All events are auto-enriched with:** `is_premium`, `device_type`, `locale`.
 
@@ -16,17 +16,21 @@ Complete step-by-step guide to create all PostHog dashboards for SMRY.
 
 ---
 
-## Quick Reference: All 7 Events
+## Quick Reference: All 11 Events
 
 | Event | When it fires | Key Properties |
 |-------|---------------|----------------|
-| `article_loaded` | Article renders successfully | `source`, `hostname`, `fetch_ms`, `classified`, `classification_outcome`, `sources_succeeded`, `sources_failed` |
+| `article_loaded` | Article renders successfully | `source`, `hostname`, `fetch_ms`, `classified`, `classification_outcome`, `sources_succeeded`, `sources_failed` (comma-separated string) |
 | `article_error` | All extraction sources fail | `error_name`, `hostname` |
 | `ad_click` | User clicks an ad | `placement`, `ad_provider` |
 | `chat_message_sent` | User sends a chat message | `message_length`, `language` |
 | `article_shared` | User shares an article | `method` (copy_link / native / x_twitter / linkedin / reddit) |
 | `highlight_created` | User highlights text | `text_length`, `color` |
 | `tts_requested` | User requests text-to-speech | `voice`, `article_url` |
+| `theme_changed` | User switches theme | `theme` |
+| `view_mode_changed` | User switches view mode | `view_mode` (markdown / html / iframe) |
+| `toolbar_click` | Floating toolbar button clicked | `action` (open_original / listen / history / reader_settings / settings) |
+| `annotation_action` | Highlight edit, delete, export | `action` (edit_note / delete / export), `highlight_count` |
 
 ---
 
@@ -152,6 +156,8 @@ Example insight: "nytimes.com has 95% success rate, avg latency 2.3s, winning so
 
 ### Step 7 — "Source Failures"
 
+`sources_failed` is a comma-separated string (e.g., `"smry-slow,wayback"`). PostHog's "contains" text filter works on this format.
+
 1. **+ Add insight** → **+ New insight** → **Trends**
 2. Event A: `article_loaded`
    - Click the **filter icon** (funnel) next to the event
@@ -275,7 +281,41 @@ High messages-per-user = engaged chatters.
 
 Shows which voices are most popular.
 
-**Dashboard 4 done — 4 cards.**
+### Step 6 — "Theme Usage"
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `theme_changed`, Aggregation: **Total count**
+3. **+ Add breakdown** → `theme`
+4. Date range: **Last 30 days**
+5. Display: **Pie chart**
+6. **Save** → name: `Theme Usage` → add to `Feature Adoption`
+
+### Step 7 — "View Mode Usage"
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `view_mode_changed`, Aggregation: **Total count**
+3. **+ Add breakdown** → `view_mode`
+4. Date range: **Last 30 days**
+5. Display: **Pie chart**
+6. **Save** → name: `View Mode Usage` → add to `Feature Adoption`
+
+### Step 8 — "Toolbar Engagement"
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `toolbar_click`, Aggregation: **Total count**
+3. **+ Add breakdown** → `action`
+4. Date range: **Last 30 days**
+5. **Save** → name: `Toolbar Engagement` → add to `Feature Adoption`
+
+### Step 9 — "Annotation Activity"
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `annotation_action`, Aggregation: **Total count**
+3. **+ Add breakdown** → `action`
+4. Date range: **Last 30 days**
+5. **Save** → name: `Annotation Activity` → add to `Feature Adoption`
+
+**Dashboard 4 done — 8 cards.**
 
 ---
 
@@ -369,8 +409,8 @@ Alerts notify you when something breaks or degrades.
 | 1 | SMRY Overview | 3 | Is everything working? How many users? |
 | 2 | Top Sites | 7 | Which sites work/fail? Which source wins? |
 | 3 | Ad Clicks | 3 | Which ads get clicked? Revenue optimization |
-| 4 | Feature Adoption | 4 | Which features do people use? |
+| 4 | Feature Adoption | 8 | Which features do people use? |
 | 5 | Retention | 2 | Are users coming back? |
 | 6 | Heatmaps | built-in | Where do users click/scroll? |
 
-**Total: 19 insight cards across 5 custom dashboards + built-in heatmaps.**
+**Total: 23 insight cards across 5 custom dashboards + built-in heatmaps.**

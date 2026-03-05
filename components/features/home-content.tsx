@@ -523,8 +523,8 @@ export const HomeContent = memo(function HomeContent() {
               <GravityAd
                 ad={ad}
                 variant="home"
-                onVisible={() => { fireImpression(ad, "home", 0); }}
-                onClick={() => { fireClick(ad, "home", 0); track("ad_click", { placement: "home", ad_provider: ad.ad_provider }); }}
+                onVisible={() => { fireImpression(ad, "Homepage", 0); }}
+                onClick={() => { fireClick(ad, "Homepage", 0); track("ad_click", { placement: "Homepage", ad_provider: ad.ad_provider }); }}
               />
             </div>
           )}

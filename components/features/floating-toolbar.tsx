@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/menu";
 import { Source } from "@/types/api";
 import type { ArticleExportData } from "@/components/features/export-article";
+import { useAnalytics } from "@/lib/hooks/use-analytics";
 
 interface TooltipProps {
   label: string;
@@ -140,6 +141,7 @@ function ViewModeSelector({
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
 }) {
+  const { track } = useAnalytics();
   const [hovered, setHovered] = React.useState(false);
   const timeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   const modes = ["markdown", "html", "iframe"] as const;
@@ -193,6 +195,7 @@ function ViewModeSelector({
                 key={mode}
                 onClick={() => {
                   onViewModeChange(mode);
+                  track("view_mode_changed", { view_mode: mode });
                   setHovered(false);
                 }}
                 className={cn(
@@ -255,10 +258,12 @@ export function FloatingToolbar({
   isTTSActive,
   isTTSLoading,
 }: FloatingToolbarProps) {
+  const { track } = useAnalytics();
   const anyPanelOpen = !!(styleOptionsOpen || shareOpen);
 
   // Open original URL
   const openOriginal = () => {
+    track("toolbar_click", { action: "open_original" });
     window.open(originalUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -327,7 +332,7 @@ export function FloatingToolbar({
         }
         label={isTTSActive ? "Stop listening" : "Listen"}
         shortcut="L"
-        onClick={onTTSToggle}
+        onClick={() => { track("toolbar_click", { action: "listen" }); onTTSToggle?.(); }}
         isActive={isTTSActive}
       />
 
@@ -345,6 +350,7 @@ export function FloatingToolbar({
             "text-muted-foreground"
           )}
           aria-label="Reading History"
+          onClick={() => { track("toolbar_click", { action: "history" }); }}
         >
           <History className="size-5" />
         </Link>
@@ -359,7 +365,7 @@ export function FloatingToolbar({
             side="right"
             align="center"
             open={styleOptionsOpen}
-            onOpenChange={onStyleOptionsOpenChange}
+            onOpenChange={(open) => { if (open) track("toolbar_click", { action: "reader_settings" }); onStyleOptionsOpenChange?.(open); }}
           />
         </div>
       </Tooltip>
@@ -369,7 +375,7 @@ export function FloatingToolbar({
         icon={<Settings className="size-5" />}
         label="Settings"
         shortcut=","
-        onClick={onOpenSettings}
+        onClick={() => { track("toolbar_click", { action: "settings" }); onOpenSettings(); }}
         tooltipDisabled={anyPanelOpen}
       />
 
