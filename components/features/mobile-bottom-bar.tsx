@@ -253,7 +253,10 @@ export function MobileBottomBar({
   };
 
   const handleTweet = () => {
-    const xShareText = `https://smry.ai/proxy?url=${encodeURIComponent(originalUrl)}`;
+    const cleanUrl = `https://smry.ai/${/^https?:\/\//i.test(originalUrl) ? originalUrl : `https://${originalUrl}`}`;
+    const xShareText = articleTitle
+      ? `${articleTitle} — read on smry.ai\n${cleanUrl}`
+      : cleanUrl;
     const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(xShareText)}`;
     window.open(tweetUrl, "_blank", "noopener,noreferrer");
     setShareDrawerOpen(false);

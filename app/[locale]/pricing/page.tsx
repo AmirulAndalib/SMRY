@@ -7,20 +7,20 @@ import { generateAlternates } from '@/lib/seo/alternates';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: 'Pricing - Free & Pro Plans | SMRY',
+  title: 'Pricing — Free & Pro Plans for Paywall Bypass & AI Summaries | SMRY',
   description:
-    'Get unlimited article summaries and paywall bypass with SMRY Pro. Start free, upgrade when you need more.',
+    'Start reading paywalled articles for free with SMRY. Upgrade to Pro for unlimited AI summaries, chat with articles, and priority access. No commitment, cancel anytime.',
   alternates: generateAlternates('/pricing'),
   openGraph: {
-    title: 'SMRY Pricing - Free & Pro Plans',
+    title: 'Pricing — Free & Pro Plans for Paywall Bypass & AI Summaries | SMRY',
     description:
-      'Unlimited AI summaries and paywall bypass. Free tier available.',
+      'Start reading paywalled articles for free with SMRY. Upgrade to Pro for unlimited AI summaries, chat with articles, and priority access. No commitment, cancel anytime.',
     url: 'https://smry.ai/pricing',
   },
   twitter: {
-    title: 'SMRY Pricing - Free & Pro Plans',
+    title: 'Pricing — Free & Pro Plans for Paywall Bypass & AI Summaries | SMRY',
     description:
-      'Unlimited AI summaries and paywall bypass. Free tier available.',
+      'Start reading paywalled articles for free with SMRY. Upgrade to Pro for unlimited AI summaries, chat with articles, and priority access. No commitment, cancel anytime.',
   },
 };
 

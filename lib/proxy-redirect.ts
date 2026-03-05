@@ -25,6 +25,7 @@ export const APP_ROUTES = [
   "/guide",
   "/auth",
   "/chat",
+  "/compare",
 ];
 
 /**

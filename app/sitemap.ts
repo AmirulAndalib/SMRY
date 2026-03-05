@@ -1,8 +1,9 @@
 import { MetadataRoute } from 'next'
 import { locales, defaultLocale } from '@/i18n/routing'
+import { competitorSlugs } from '@/lib/comparisons/competitors'
 
 const BASE_URL = 'https://smry.ai'
-const pages = ['', '/pricing', '/guide', '/hard-paywalls', '/changelog']
+const pages = ['', '/pricing', '/guide', '/hard-paywalls', '/changelog', ...competitorSlugs.map(s => `/compare/${s}`)]
 
 type SitemapEntry = MetadataRoute.Sitemap[number]
 

@@ -9,20 +9,20 @@ import { generateAlternates } from '@/lib/seo/alternates';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: "Understanding Paywalls | SMRY",
+  title: "Hard vs Soft Paywalls — Which Sites Does SMRY Support? | SMRY",
   description:
-    "Learn the difference between hard and soft paywalls, and why some sites cannot be accessed through SMRY.",
+    "Understand the difference between hard and soft paywalls. See which news sites SMRY can bypass, which ones are blocked, and why. Updated list of supported publications.",
   alternates: generateAlternates('/hard-paywalls'),
   openGraph: {
-    title: 'Understanding Paywalls | SMRY',
+    title: 'Hard vs Soft Paywalls — Which Sites Does SMRY Support? | SMRY',
     description:
-      'Learn the difference between hard and soft paywalls, and why some sites cannot be accessed through SMRY.',
+      'Understand the difference between hard and soft paywalls. See which news sites SMRY can bypass, which ones are blocked, and why. Updated list of supported publications.',
     url: 'https://smry.ai/hard-paywalls',
   },
   twitter: {
-    title: 'Understanding Paywalls | SMRY',
+    title: 'Hard vs Soft Paywalls — Which Sites Does SMRY Support? | SMRY',
     description:
-      'Learn the difference between hard and soft paywalls, and why some sites cannot be accessed through SMRY.',
+      'Understand the difference between hard and soft paywalls. See which news sites SMRY can bypass, which ones are blocked, and why. Updated list of supported publications.',
   },
 };
 

@@ -8,8 +8,21 @@ export function generateStaticParams() {
 }
 
 export const metadata: Metadata = {
-  title: "Chat - Smry",
-  description: "Chat with AI about anything. Your conversations are stored locally.",
+  title: "AI Chat — Ask Questions About Any Article | SMRY",
+  description:
+    "Chat with AI to ask questions about any article. Get instant answers, explanations, and deeper insights. Conversations stored locally for privacy. Free to try.",
+  robots: { index: false, follow: true },
+  openGraph: {
+    title: "AI Chat — Ask Questions About Any Article | SMRY",
+    description:
+      "Chat with AI to ask questions about any article. Get instant answers, explanations, and deeper insights. Free to try.",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "AI Chat — Ask Questions About Any Article | SMRY",
+    description:
+      "Chat with AI to ask questions about any article. Get instant answers, explanations, and deeper insights. Free to try.",
+  },
 };
 
 type Props = {

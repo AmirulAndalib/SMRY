@@ -256,7 +256,22 @@ Shows mobile vs tablet vs desktop click rates.
 
 Shows which provider gets more clicks per slot — useful for optimizing the ZeroClick/Gravity split.
 
-**Dashboard 3 done — 4 cards.**
+### Step 6 — "Revenue Map: Placement x Device"
+
+The most important ad insight — shows exactly which slot on which device makes money.
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `ad_click`, Aggregation: **Total count**
+3. **+ Add breakdown** → select **Event property** → type `placement` → select it
+4. **+ Add breakdown** again → select **Event property** → type `device_type` → select it
+5. Date range: **Last 7 days**
+6. Display: click the chart icon row above the chart → select **Table** (grid icon)
+7. You'll see a table with rows like `article_sidebar / desktop`, `mobile_article_bottom / mobile`, etc.
+8. **Save & add to dashboard** → name: `Revenue Map: Placement x Device` → select `Ad Clicks` → Save
+
+**How to read it:** Sort by count descending. The top rows are where your money comes from. If `mobile_article_bottom / mobile` has 10x more clicks than `chat_top / desktop`, prioritize mobile ad UX. If a placement has zero clicks on a device type, consider removing it there (less clutter, same revenue).
+
+**Dashboard 3 done — 6 cards.**
 
 ---
 
@@ -416,15 +431,66 @@ Alerts notify you when something breaks or degrades.
 
 ---
 
+## Dashboard 7: Bypass Performance (success rate + latency)
+
+**Purpose:** "Is our article extraction getting better over time? Are we getting faster?"
+
+Two line graphs: success rate should trend UP, latency should trend DOWN.
+
+### Step 1 — Create the dashboard
+
+1. Left sidebar → **Dashboards** → **+ New dashboard** → **Blank dashboard**
+2. Name: `Bypass Performance`
+3. Save
+
+### Step 2 — "Bypass Success Rate (%)"
+
+This shows the percentage of article requests that successfully extract content. Should trend upward.
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Under **Series**, add two events:
+   - Event A: click the event dropdown → select `article_loaded` → rename to `Success`
+   - Click **+ Add graph series** → Event B: select `article_error` → rename to `Error`
+3. Look for **Enable formula mode** (toggle or button below the series) → click it
+4. In the formula field, type: `A / (A + B) * 100`
+5. Date range: **Last 30 days**
+6. Display: **Line chart** (default)
+7. You'll see a line showing the success percentage over time — should trend upward
+8. **Save & add to dashboard** → name: `Bypass Success Rate (%)` → select `Bypass Performance` → Save
+
+### Step 3 — "Latency by Source (ms)"
+
+Shows average extraction latency per source over time. Should trend downward.
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `article_loaded`
+3. Click **Total count** (the aggregation dropdown) → change to **Property value** → then **Average**
+4. A property picker appears → type `fetch_ms` → select it
+5. **+ Add breakdown** → select **Event property** → type `source` → select it
+6. Date range: **Last 30 days**
+7. Display: **Line chart** (default)
+8. You'll see one line per source (smry-fast, smry-slow, wayback) — shows both overall trend and which extractor is fastest
+9. **Save & add to dashboard** → name: `Latency by Source (ms)` → select `Bypass Performance` → Save
+
+**Dashboard 7 done — 2 cards.**
+
+**How to read it:**
+- **Success rate going up** = your extraction is getting more reliable (better bypass, better classifier)
+- **Latency going down** = your caching and source selection is improving
+- **Source breakdown** = tells you which extractor (smry-fast, smry-slow, wayback) is carrying the team and which is dragging it down
+
+---
+
 ## Summary
 
 | # | Dashboard | Cards | What it answers |
 |---|-----------|-------|-----------------|
 | 1 | SMRY Overview | 3 | Is everything working? How many users? |
 | 2 | Top Sites | 7 | Which sites work/fail? Which source wins? |
-| 3 | Ad Clicks | 4 | Which ads get clicked? Provider comparison |
+| 3 | Ad Clicks | 6 | Which ads get clicked? Provider comparison |
 | 4 | Feature Adoption | 6 | Which features do people use? |
 | 5 | Retention | 2 | Are users coming back? |
 | 6 | Heatmaps | built-in | Where do users click/scroll? |
+| 7 | Bypass Performance | 2 | Is extraction getting better and faster? |
 
-**Total: 22 insight cards across 5 custom dashboards + built-in heatmaps.**
+**Total: 26 insight cards across 7 custom dashboards + built-in heatmaps.**

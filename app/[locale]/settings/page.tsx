@@ -11,9 +11,11 @@ export function generateStaticParams() {
 }
 
 export const metadata: Metadata = {
-  title: 'Settings | SMRY',
-  description: 'Customize your reading experience with appearance, typography, and language settings.',
+  title: 'Reader Settings — Fonts, Themes & Preferences | SMRY',
+  description:
+    'Customize your SMRY reading experience. Choose from 10 themes, 5 fonts, adjust text size and spacing, and set your preferred language. Changes apply instantly.',
   alternates: generateAlternates('/settings'),
+  robots: { index: false, follow: true },
 };
 
 type Props = {

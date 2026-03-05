@@ -162,6 +162,29 @@ export default async function OGImage() {
               paste any article URL
             </span>
           </div>
+
+          {/* CTA */}
+          <div
+            style={{
+              display: "flex",
+              marginTop: 28,
+              padding: "12px 32px",
+              borderRadius: 10,
+              background: "linear-gradient(135deg, #5e69d1, #7c3aed)",
+            }}
+          >
+            <span
+              style={{
+                fontFamily: "Inter",
+                fontSize: 20,
+                fontWeight: 600,
+                color: "#ffffff",
+                letterSpacing: "-0.01em",
+              }}
+            >
+              Try it free — no account needed →
+            </span>
+          </div>
         </div>
       </div>
     ),

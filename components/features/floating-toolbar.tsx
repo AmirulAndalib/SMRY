@@ -306,7 +306,7 @@ export function FloatingToolbar({
       />
 
       {/* Share - using custom wrapper since ShareButton has its own trigger */}
-      <Tooltip label="Share" shortcut="⇧S" disabled={anyPanelOpen}>
+      <Tooltip label="Share" shortcut="S" disabled={anyPanelOpen}>
         <div className="size-10 flex items-center justify-center">
           <ShareButton
             url={shareUrl}
@@ -357,7 +357,7 @@ export function FloatingToolbar({
       <div className="h-px bg-border/50 my-1" />
 
       {/* Style Options/Reader Settings Popover */}
-      <Tooltip label="Style Options" shortcut="S" disabled={anyPanelOpen}>
+      <Tooltip label="Style Options" shortcut="⇧S" disabled={anyPanelOpen}>
         <div>
           <ReaderSettingsPopover
             side="right"

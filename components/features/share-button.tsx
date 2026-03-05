@@ -101,7 +101,7 @@ const ShareModalContent = React.memo(function ShareModalContent({
     }
   };
 
-  const shareUrls = generateShareUrls(originalUrl || "");
+  const shareUrls = generateShareUrls(originalUrl || "", articleTitle);
 
   // Export view
   if (view === "export" && articleExportData) {

@@ -7,9 +7,9 @@ import { generateNoIndexAlternates } from '@/lib/seo/alternates';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: 'Reading History | SMRY',
+  title: 'Your Reading History — Previously Read Articles | SMRY',
   description:
-    'View your reading history and previously summarized articles on SMRY.',
+    'Browse your reading history and revisit previously summarized articles on SMRY. Your history is stored locally in your browser for privacy.',
   alternates: generateNoIndexAlternates('/history'),
   robots: {
     index: false,

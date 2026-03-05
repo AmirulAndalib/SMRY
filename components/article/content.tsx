@@ -314,17 +314,18 @@ async function initDOMPurify() {
 }
 
 /**
- * Hook to get sanitized HTML content (client-side only)
+ * Hook to get sanitized HTML content (client-side only).
+ * Returns { html, isLoading } to distinguish "sanitizing" from "no content".
  */
-function useSanitizedHtml(html: string | undefined | null): string | null {
-  const cachedValue = html ? sanitizedHtmlCache.get(html) : null;
+function useSanitizedHtml(html: string | undefined | null): { html: string | null; isLoading: boolean } {
+  const cachedValue = html ? sanitizedHtmlCache.get(html) : undefined;
   const [sanitized, setSanitized] = useState<string | null>(() => {
     if (!html) return null;
     return cachedValue ?? null;
   });
 
   useEffect(() => {
-    if (!html || cachedValue) return;
+    if (!html || cachedValue !== undefined) return;
 
     let cancelled = false;
     initDOMPurify().then((dp) => {
@@ -340,8 +341,10 @@ function useSanitizedHtml(html: string | undefined | null): string | null {
     };
   }, [html, cachedValue]);
 
-  if (!html) return null;
-  return cachedValue ?? sanitized;
+  if (!html) return { html: null, isLoading: false };
+  const result = cachedValue ?? sanitized;
+  // Loading = we have raw html but sanitization hasn't completed yet
+  return { html: result, isLoading: result === null };
 }
 
 interface ArticleContentProps {
@@ -395,7 +398,7 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
 }) {
   const contentRef = React.useRef<HTMLDivElement>(null);
   const articleContent = data?.article?.content;
-  const sanitizedArticleContent = useSanitizedHtml(articleContent);
+  const { html: sanitizedArticleContent, isLoading: isSanitizing } = useSanitizedHtml(articleContent);
 
   // Highlights functionality - from shared context
   const {
@@ -874,6 +877,21 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
                     />
                   </div>
                 )
+              ) : isSanitizing ? (
+                // DOMPurify is loading asynchronously — show skeleton instead of "Content not available"
+                <div className="mt-6 space-y-6">
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-[18px] w-full rounded" />
+                    <Skeleton className="h-[18px] w-full rounded" />
+                    <Skeleton className="h-[18px] w-[92%] rounded" />
+                    <Skeleton className="h-[18px] w-[78%] rounded" />
+                  </div>
+                  <div className="space-y-2.5">
+                    <Skeleton className="h-[18px] w-full rounded" />
+                    <Skeleton className="h-[18px] w-[88%] rounded" />
+                    <Skeleton className="h-[18px] w-[70%] rounded" />
+                  </div>
+                </div>
               ) : sanitizedArticleContent ? (
                 <>
                   {/* Highlight toolbar - appears on text selection */}

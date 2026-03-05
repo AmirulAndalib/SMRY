@@ -1149,7 +1149,7 @@ interface ProxyContentProps {
 export function ProxyContent({ url }: ProxyContentProps) {
   // Use the new auto endpoint - single request, races all sources server-side
   const articleQuery = useArticleAuto(url);
-  const { isPremium } = useIsPremium();
+  const { isPremium, isLoading: isAuthLoading } = useIsPremium();
   const isDesktop = useIsDesktop();
   const { track, trackArticle } = useAnalytics();
   const showDesktopPromo = isDesktop !== false;
@@ -1246,8 +1246,11 @@ export function ProxyContent({ url }: ProxyContentProps) {
   }, [gravityAds]);
 
   // Handle article load: save to history + track
+  // Wait for auth to load so is_premium is accurate in PostHog events.
+  // The ref guard (initializedUrlRef) ensures this only fires once per URL —
+  // delaying until !isAuthLoading guarantees isPremium has resolved.
   useEffect(() => {
-    if (!firstSuccessfulArticle || initializedUrlRef.current === url) return;
+    if (!firstSuccessfulArticle || initializedUrlRef.current === url || isAuthLoading) return;
 
     initializedUrlRef.current = url;
 
@@ -1272,7 +1275,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
 
     // Track initial view mode so the pie chart includes default "markdown"
     track("view_mode_changed", { view_mode: viewMode });
-  }, [firstSuccessfulArticle, url, source, trackArticle, track, viewMode, articleQuery.data?.classification, articleQuery.data?.sources, articleQuery.data?.fetch_ms]);
+  }, [firstSuccessfulArticle, url, source, trackArticle, track, viewMode, isAuthLoading, articleQuery.data?.classification, articleQuery.data?.sources, articleQuery.data?.fetch_ms]);
 
   // Track article fetch errors
   useEffect(() => {
@@ -1838,10 +1841,10 @@ export function ProxyContent({ url }: ProxyContentProps) {
         handleOpenInAI("claude");
         return;
       }
-      // ⇧S — Open Share modal (Shift+S must be before plain S)
+      // ⇧S — Toggle Style Options popover (Shift+S must be before plain S)
       if (e.shiftKey && (e.key === "s" || e.key === "S") && !mod) {
         e.preventDefault();
-        setShareOpen(true);
+        setStyleOptionsOpen((prev) => !prev);
         return;
       }
       // A — Toggle annotations sidebar
@@ -1850,10 +1853,10 @@ export function ProxyContent({ url }: ProxyContentProps) {
         setAnnotationsSidebarOpen((prev) => !prev);
         return;
       }
-      // S — Toggle Style Options popover
+      // S — Toggle Share modal
       if ((e.key === "s" || e.key === "S") && !mod && !e.shiftKey) {
         e.preventDefault();
-        setStyleOptionsOpen((prev) => !prev);
+        setShareOpen((prev) => !prev);
         return;
       }
       // L — Toggle TTS (Listen)
@@ -2068,7 +2071,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                   viewMode={viewMode}
                   onViewModeChange={handleViewModeChange}
                   originalUrl={url}
-                  shareUrl={`https://smry.ai/proxy?url=${encodeURIComponent(url)}`}
+                  shareUrl={`https://smry.ai/${/^https?:\/\//i.test(url) ? url : `https://${url}`}`}
                   articleTitle={articleTitle}
                   source={source || "smry-fast"}
                   sidebarOpen={sidebarOpen}
@@ -2322,7 +2325,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
               <MobileBottomBar
                 viewMode={viewMode || "markdown"}
                 onViewModeChange={handleViewModeChange}
-                smryUrl={`https://smry.ai/proxy?url=${encodeURIComponent(url)}`}
+                smryUrl={`https://smry.ai/${/^https?:\/\//i.test(url) ? url : `https://${url}`}`}
                 originalUrl={url}
                 articleTitle={articleTitle}
                 onOpenSettings={() => mobileSettingsRef.current?.open()}

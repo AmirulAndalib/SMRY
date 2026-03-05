@@ -7,20 +7,21 @@ import { generateAlternates } from '@/lib/seo/alternates';
 export const dynamic = 'force-static';
 
 export const metadata: Metadata = {
-  title: "Paywall Bypass Guide | SMRY",
+  title: "How to Bypass Paywalls — An Honest 2026 Guide | SMRY",
   description:
-    "An honest guide to bypassing paywalls. What works, what doesn't, and what to try when SMRY can't get your article.",
+    "Straightforward guide to bypassing paywalls. Learn what works, what doesn't, and what to try when SMRY can't access your article. No hacks, just real methods.",
   alternates: generateAlternates('/guide'),
   openGraph: {
-    title: 'Paywall Bypass Guide | SMRY',
+    title: 'How to Bypass Paywalls — An Honest 2026 Guide | SMRY',
     description:
-      "An honest guide to bypassing paywalls. What works, what doesn't, and what to try when SMRY can't get your article.",
+      "Straightforward guide to bypassing paywalls. Learn what works, what doesn't, and what to try when SMRY can't access your article. No hacks, just real methods.",
     url: 'https://smry.ai/guide',
   },
   twitter: {
-    title: 'Paywall Bypass Guide | SMRY',
+    card: 'summary_large_image',
+    title: 'How to Bypass Paywalls — An Honest 2026 Guide | SMRY',
     description:
-      "An honest guide to bypassing paywalls. What works, what doesn't, and what to try when SMRY can't get your article.",
+      "Straightforward guide to bypassing paywalls. Learn what works, what doesn't, and what to try when SMRY can't access your article. No hacks, just real methods.",
   },
 };
 

@@ -9,6 +9,7 @@ import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { useTranslations } from "next-intl";
 import { Link } from "@/i18n/navigation";
+import { competitorSlugs, competitors } from "@/lib/comparisons/competitors";
 
 function useGitHubStars(username: string, repo: string) {
   return useQuery({
@@ -45,6 +46,24 @@ export function SiteFooter({ className }: React.HTMLAttributes<HTMLElement>) {
 
   return (
     <footer className={cn(className)}>
+      {/* Compare links */}
+      <div className="container border-b border-border/20 px-4 py-6 md:px-10">
+        <h3 className="text-xs font-medium uppercase tracking-wider text-muted-foreground/70 mb-3">
+          Compare
+        </h3>
+        <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+          {competitorSlugs.map((slug) => (
+            <Link
+              key={slug}
+              href={`/compare/${slug}`}
+              className="text-xs text-muted-foreground/70 transition-colors hover:text-foreground"
+            >
+              SMRY vs {competitors[slug].name}
+            </Link>
+          ))}
+        </div>
+      </div>
+
       <div className="container mb-10 flex flex-col items-center gap-6 py-10 md:grid md:grid-cols-[minmax(0,1fr)_auto] md:items-center md:gap-8 md:py-6">
         <div className="flex flex-col items-center gap-3 text-center md:flex-row md:items-center md:gap-4 md:text-left">
           <Image

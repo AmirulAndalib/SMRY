@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import { usePostHog } from "posthog-js/react";
 import { useIsPremium } from "./use-is-premium";
 
@@ -40,12 +40,20 @@ export function useAnalytics() {
   const posthog = usePostHog();
   const { isPremium } = useIsPremium();
 
+  // Ref ensures track() always reads the LATEST isPremium at call time,
+  // not the stale value captured when the useCallback closure was created.
+  // Without this, article_loaded (which fires before auth loads) always sends is_premium: false.
+  const isPremiumRef = useRef(isPremium);
+  useEffect(() => {
+    isPremiumRef.current = isPremium;
+  }, [isPremium]);
+
   const track = useCallback(
     (event: AnalyticsEvent, props?: Record<string, unknown>) => {
       if (!posthog) return;
       try {
         posthog.capture(event, {
-          is_premium: isPremium,
+          is_premium: isPremiumRef.current,
           device_type: getDeviceType(),
           locale: typeof navigator !== "undefined" ? navigator.language : undefined,
           ...props,
@@ -54,7 +62,7 @@ export function useAnalytics() {
         // Analytics should never crash the app
       }
     },
-    [posthog, isPremium],
+    [posthog],
   );
 
   const trackArticle = useCallback(

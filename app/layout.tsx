@@ -50,26 +50,26 @@ import { PostHogProvider } from "@/components/providers/posthog-provider";
 // in each route segment for proper caching and to avoid robots.txt blocking issues
 export const metadata: Metadata = {
   metadataBase: new URL("https://smry.ai"),
-  title: "Read Anything, Summarize Everything | Smry",
+  title: "Bypass Paywalls & Read Articles Free — AI Reader | Smry",
   description:
-    "AI-powered reader that bypasses paywalls and summarizes any article. Paste a link, get the full text plus an AI summary. Free, no account needed.",
+    "Paste any paywalled article link for full text plus an AI summary. Works on news sites, research papers, and more. Free, no account or extension needed.",
   keywords: ["bypass paywall", "paywall remover", "read paywalled articles", "free paywall bypass", "article summarizer", "AI reader", "research papers"],
   // Note: alternates (canonical + hreflang) are set per-page in each page.tsx
   // to ensure correct locale-specific URLs. Do NOT add global alternates here.
   openGraph: {
     type: "website",
-    title: "Read Anything, Summarize Everything | Smry",
+    title: "Bypass Paywalls & Read Articles Free — AI Reader | Smry",
     siteName: "smry.ai",
     url: "https://smry.ai",
     description:
-      "AI-powered reader that bypasses paywalls and summarizes any article. News, research papers, paywalled content—we read it all.",
+      "Paste any paywalled article link for full text plus an AI summary. Works on news sites, research papers, and more. Free, no account needed.",
     // Images handled by opengraph-image.tsx files in route segments for proper caching and reliability
   },
   twitter: {
     card: "summary_large_image",
-    title: "Read Anything, Summarize Everything | Smry",
+    title: "Bypass Paywalls & Read Articles Free — AI Reader | Smry",
     description:
-      "AI-powered reader that bypasses paywalls and summarizes any article. News, research papers, paywalled content—we read it all.",
+      "Paste any paywalled article link for full text plus an AI summary. Works on news sites, research papers, and more. Free, no account needed.",
   },
 };
 

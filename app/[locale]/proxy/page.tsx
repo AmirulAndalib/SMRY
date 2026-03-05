@@ -14,25 +14,25 @@ const OG_BASE_URL = 'https://smry.ai';
 
 // Default metadata
 const DEFAULT_METADATA: Metadata = {
-  title: 'Proxy | Smry',
-  description: 'Read articles with Smry',
+  title: 'Read Full Article — Bypass Paywall & Get AI Summary | Smry',
+  description: 'Read the full text of any paywalled article with an AI-powered summary. Paste a link to get started — free, no account needed.',
   robots: { index: false, follow: true },
   openGraph: {
     type: 'website',
-    title: 'Proxy | Smry',
-    description: 'Read articles with Smry',
+    title: 'Read Full Article — Bypass Paywall & Get AI Summary | Smry',
+    description: 'Read the full text of any paywalled article with an AI-powered summary. Paste a link to get started — free, no account needed.',
     siteName: 'smry.ai',
     images: [{
       url: `${OG_BASE_URL}/opengraph-image`,
       width: 1200,
       height: 630,
-      alt: 'smry - Read Anything, Summarize Everything',
+      alt: 'Smry — Bypass Paywalls & Read Any Article Free',
     }],
   },
   twitter: {
     card: 'summary_large_image',
-    title: 'Proxy | Smry',
-    description: 'Read articles with Smry',
+    title: 'Read Full Article — Bypass Paywall & Get AI Summary | Smry',
+    description: 'Read the full text of any paywalled article with an AI-powered summary. Paste a link to get started — free, no account needed.',
     images: [`${OG_BASE_URL}/opengraph-image`],
   },
 };
