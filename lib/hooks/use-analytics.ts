@@ -32,8 +32,9 @@ function getDeviceType(): "mobile" | "tablet" | "desktop" {
  * Shared analytics hook wrapping PostHog with auto-enrichment.
  *
  * Usage:
- *   const { track, trackArticle } = useAnalytics();
+ *   const { track, trackArticle, trackViaBeacon } = useAnalytics();
  *   track("article_shared", { method: "copy_link" });
+ *   trackViaBeacon("ad_click", { placement: "homepage" }); // guaranteed delivery
  *   trackArticle("article_loaded", articleUrl, { source: "smry-fast" });
  */
 export function useAnalytics() {
@@ -65,6 +66,51 @@ export function useAnalytics() {
     [posthog],
   );
 
+  // Send event via navigator.sendBeacon directly to PostHog's capture API.
+  // Unlike posthog.capture() which batches events and can lose them when the
+  // browser navigates away (e.g. clicking an ad link), sendBeacon is guaranteed
+  // to deliver even during page unload/navigation.
+  const trackViaBeacon = useCallback(
+    (event: AnalyticsEvent, props?: Record<string, unknown>) => {
+      try {
+        const apiKey = process.env.NEXT_PUBLIC_POSTHOG_KEY;
+        const apiHost = process.env.NEXT_PUBLIC_POSTHOG_HOST || "https://us.i.posthog.com";
+
+        if (!apiKey || typeof navigator === "undefined" || !navigator.sendBeacon) {
+          // Fallback to regular track if sendBeacon unavailable
+          track(event, props);
+          return;
+        }
+
+        const distinctId = posthog?.get_distinct_id?.() ?? "anonymous";
+        const sessionId = posthog?.get_session_id?.() ?? undefined;
+
+        const payload = JSON.stringify({
+          api_key: apiKey,
+          event,
+          properties: {
+            distinct_id: distinctId,
+            $session_id: sessionId,
+            is_premium: isPremiumRef.current,
+            device_type: getDeviceType(),
+            locale: navigator.language,
+            ...props,
+          },
+          timestamp: new Date().toISOString(),
+        });
+
+        navigator.sendBeacon(
+          `${apiHost}/capture/`,
+          new Blob([payload], { type: "application/json" }),
+        );
+      } catch {
+        // Fallback to regular track
+        track(event, props);
+      }
+    },
+    [posthog, track],
+  );
+
   const trackArticle = useCallback(
     (event: AnalyticsEvent, articleUrl: string, props?: Record<string, unknown>) => {
       try {
@@ -77,5 +123,5 @@ export function useAnalytics() {
     [track],
   );
 
-  return { track, trackArticle };
+  return { track, trackArticle, trackViaBeacon };
 }
