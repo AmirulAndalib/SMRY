@@ -87,11 +87,13 @@ interface ArticleChatProps {
   initialMessages?: import("ai").UIMessage[];
   // Header ad (above prompt input)
   headerAd?: GravityAdType | null;
+  headerAdPlacement?: string;
   onHeaderAdVisible?: () => void;
   onHeaderAdClick?: () => void;
   onHeaderAdDismiss?: () => void;
   // Inline ad after messages
   ad?: GravityAdType | null;
+  adPlacement?: string;
   onAdVisible?: () => void;
   onAdClick?: () => void;
   onAdDismiss?: () => void;
@@ -119,10 +121,12 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
   onMessagesChange,
   initialMessages: initialMessagesProp,
   headerAd,
+  headerAdPlacement,
   onHeaderAdVisible,
   onHeaderAdClick,
   onHeaderAdDismiss,
   ad,
+  adPlacement,
   onAdVisible,
   onAdClick,
   onAdDismiss: _onAdDismiss,
@@ -549,6 +553,7 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
                         <div className="my-5">
                           <GravityAd
                             ad={ad}
+                            placement={adPlacement || "chat_middle"}
                             variant="inline-chat"
                             onVisible={onAdVisible ?? (() => {})}
                             onClick={onAdClick}
@@ -661,6 +666,7 @@ export const ArticleChat = memo(forwardRef<ArticleChatHandle, ArticleChatProps>(
             <div className="mt-1 mb-1">
               <GravityAd
                 ad={headerAd}
+                placement={headerAdPlacement || "chat_top"}
                 variant="chat-prompt"
                 onVisible={onHeaderAdVisible ?? (() => {})}
                 onClick={onHeaderAdClick}

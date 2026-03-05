@@ -78,7 +78,7 @@ export function ModeToggle() {
         {themes.map((t) => (
           <DropdownMenuItem
             key={t.id}
-            onClick={() => { setTheme(t.id); track("theme_changed", { theme: t.id }); }}
+            onSelect={() => { setTheme(t.id); track("theme_changed", { theme: t.id }); }}
             className="flex items-center gap-2"
           >
             <ThemeSwatch theme={t} />

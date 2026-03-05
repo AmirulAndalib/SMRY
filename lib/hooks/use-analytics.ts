@@ -18,9 +18,7 @@ export type AnalyticsEvent =
   | "highlight_created"
   | "tts_requested"
   | "theme_changed"        // user switches theme
-  | "view_mode_changed"    // user switches reader/original/iframe
-  | "toolbar_click"        // floating sidebar button clicked
-  | "annotation_action";   // highlight edit, delete, export
+  | "view_mode_changed";   // user switches reader/original/iframe
 
 function getDeviceType(): "mobile" | "tablet" | "desktop" {
   if (typeof window === "undefined") return "desktop";

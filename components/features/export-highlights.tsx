@@ -21,8 +21,6 @@ import {
 } from "@/components/ui/dialog";
 import { useIsDesktop } from "@/lib/hooks/use-media-query";
 import type { Highlight, ArticleHighlights } from "@/lib/hooks/use-highlights";
-import { useAnalytics } from "@/lib/hooks/use-analytics";
-
 // Icons for each export target
 function NotionIcon({ className }: { className?: string }) {
   return (
@@ -67,7 +65,6 @@ export function ExportHighlights({
   const [open, setOpen] = useState(false);
   const [copied, setCopied] = useState<ExportFormat | null>(null);
   const isDesktop = useIsDesktop();
-  const { track } = useAnalytics();
 
   const highlightsToExport = useMemo(() => {
     if (allHighlights) return allHighlights;
@@ -183,11 +180,10 @@ export function ExportHighlights({
       setCopied(format);
       setTimeout(() => setCopied(null), 2000);
       toast.success("Copied to clipboard");
-      track("annotation_action", { action: "export", highlight_count: totalHighlights });
     } catch {
       toast.error("Failed to copy");
     }
-  }, [generateNotionMarkdown, generateObsidianMarkdown, generateRoamMarkdown, generateMarkdown, generateJSON, totalHighlights, track]);
+  }, [generateNotionMarkdown, generateObsidianMarkdown, generateRoamMarkdown, generateMarkdown, generateJSON]);
 
   const handleDownload = useCallback((format: ExportFormat) => {
     let content: string;
@@ -209,8 +205,7 @@ export function ExportHighlights({
     a.href = blobUrl; a.download = filename;
     document.body.appendChild(a); a.click();
     document.body.removeChild(a); URL.revokeObjectURL(blobUrl);
-    track("annotation_action", { action: "export", highlight_count: totalHighlights });
-  }, [articleTitle, generateNotionMarkdown, generateObsidianMarkdown, generateRoamMarkdown, generateMarkdown, generateJSON, totalHighlights, track]);
+  }, [articleTitle, generateNotionMarkdown, generateObsidianMarkdown, generateRoamMarkdown, generateMarkdown, generateJSON]);
 
   const exportOptions: { format: ExportFormat; name: string; icon: React.ReactNode; description: string; }[] = [
     { format: "notion", name: "Notion", icon: <NotionIcon className="size-5" />, description: "Paste directly into Notion" },

@@ -92,6 +92,7 @@ const ArticleWithInlineAd = memo(function ArticleWithInlineAd({
   dir,
   lang,
   inlineAd,
+  inlineAdPlacement,
   onInlineAdVisible,
   onInlineAdClick,
 }: {
@@ -100,6 +101,7 @@ const ArticleWithInlineAd = memo(function ArticleWithInlineAd({
   dir: string;
   lang: string | undefined;
   inlineAd?: GravityAdType | null;
+  inlineAdPlacement?: string;
   onInlineAdVisible?: () => void;
   onInlineAdClick?: () => void;
 }) {
@@ -168,6 +170,7 @@ const ArticleWithInlineAd = memo(function ArticleWithInlineAd({
         <div className="my-14 sm:my-10">
           <GravityAd
             ad={inlineAd}
+            placement={inlineAdPlacement || "article_inline"}
             variant="inline"
             onVisible={onInlineAdVisible ?? (() => {})}
             onClick={onInlineAdClick}
@@ -353,11 +356,13 @@ interface ArticleContentProps {
   onFullScreenChange?: (fullScreen: boolean) => void;
   // Single inline ad - appears mid-article for higher CTR
   inlineAd?: GravityAdType | null;
+  inlineAdPlacement?: string;
   onInlineAdVisible?: () => void;
   onInlineAdClick?: () => void;
   showInlineAd?: boolean;
   // Footer ad - appears at the bottom of the article
   footerAd?: GravityAdType | null;
+  footerAdPlacement?: string;
   onFooterAdVisible?: () => void;
   onFooterAdClick?: () => void;
   // Ask AI - triggered from highlight toolbar
@@ -377,10 +382,12 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
   isFullScreen = false,
   onFullScreenChange,
   inlineAd,
+  inlineAdPlacement,
   onInlineAdVisible,
   onInlineAdClick,
   showInlineAd = true,
   footerAd,
+  footerAdPlacement,
   onFooterAdVisible,
   onFooterAdClick,
   onAskAI,
@@ -908,6 +915,7 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
                     dir={data?.article?.dir || "ltr"}
                     lang={data?.article?.lang || undefined}
                     inlineAd={showInlineAd ? inlineAd : null}
+                    inlineAdPlacement={inlineAdPlacement}
                     onInlineAdVisible={onInlineAdVisible}
                     onInlineAdClick={onInlineAdClick}
                   />
@@ -918,6 +926,7 @@ export const ArticleContent: React.FC<ArticleContentProps> = memo(function Artic
                     <div className="mt-6 mb-4 sm:mt-4 sm:mb-6">
                       <GravityAd
                         ad={footerAd}
+                        placement={footerAdPlacement || "article_footer"}
                         variant="inline"
                         onVisible={onFooterAdVisible ?? (() => {})}
                         onClick={onFooterAdClick}

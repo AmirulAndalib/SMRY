@@ -2,7 +2,7 @@
 
 Complete reference for all analytics events, setup, and dashboards.
 
-**Last updated: March 2026** (lean implementation — 11 custom events + heatmaps, client-side only)
+**Last updated: March 2026** (lean implementation — 9 custom events + heatmaps, client-side only)
 
 ---
 
@@ -14,17 +14,19 @@ Complete reference for all analytics events, setup, and dashboards.
 │                                                                  │
 │  posthog-js SDK (lean config)                                    │
 │  ├── Heatmaps (click positions, scroll depth)                    │
-│  └── 11 Custom Events (track() via useAnalytics hook)            │
+│  └── 9 Custom Events (track() via useAnalytics hook)             │
 │                                                                  │
 │  DISABLED: $pageview, $pageleave, autocapture, session recording │
 │  Visitor tracking handled by DataBuddy (separate tool)           │
 ├──────────────────────────────────────────────────────────────────┤
-│  Ad Click Tracking                                               │
+│  Ad Click Tracking (component-level)                             │
 │                                                                  │
-│  fireClick() in useGravityAd hook handles BOTH:                  │
-│  ├── /api/px (sendBeacon) → Gravity forwarding + Pino logs       │
-│  └── PostHog track("ad_click") → placement analytics             │
-│  Single call site per placement = no naming drift                │
+│  GravityAd component (components/ads/gravity-ad.tsx):            │
+│  └── PostHog track("ad_click") with placement + ad_provider      │
+│      Fires on every click, regardless of parent wiring.          │
+│                                                                  │
+│  fireClick() in useGravityAd hook (separate concern):            │
+│  └── /api/px (sendBeacon) → server billing logs only             │
 ├──────────────────────────────────────────────────────────────────┤
 │  Ad Impression Billing (NOT in PostHog)                          │
 │                                                                  │
@@ -45,15 +47,14 @@ Complete reference for all analytics events, setup, and dashboards.
 |------|---------|
 | `components/providers/posthog-provider.tsx` | SDK init, heatmaps enabled |
 | `lib/hooks/use-analytics.ts` | Client hook: `track()`, `trackArticle()` |
-| `lib/hooks/use-gravity-ad.ts` | `ad_click` (inside `fireClick()` — single source of truth) |
-| `components/features/proxy-content.tsx` | `article_loaded`, `article_error`, `tts_requested` |
+| `components/ads/gravity-ad.tsx` | `ad_click` — tracks on every click with `placement` + `ad_provider` |
+| `lib/hooks/use-gravity-ad.ts` | `fireClick()` → `/api/px` server billing only (no PostHog) |
+| `components/features/proxy-content.tsx` | `article_loaded`, `article_error`, `tts_requested`, `view_mode_changed` |
 | `components/features/article-chat.tsx` | `chat_message_sent` |
 | `components/features/share-button.tsx` | `article_shared` |
 | `components/features/highlight-toolbar.tsx` | `highlight_created` |
 | `components/shared/mode-toggle.tsx` | `theme_changed` |
-| `components/features/floating-toolbar.tsx` | `view_mode_changed`, `toolbar_click` |
-| `components/features/annotation-card.tsx` | `annotation_action` (edit_note, delete) |
-| `components/features/export-highlights.tsx` | `annotation_action` (export) |
+| `components/features/floating-toolbar.tsx` | `view_mode_changed` |
 
 ---
 
@@ -93,7 +94,7 @@ Initialized in `components/providers/posthog-provider.tsx`:
 
 ---
 
-## All Custom Events (11 total)
+## All Custom Events (9 total)
 
 ```typescript
 export type AnalyticsEvent =
@@ -108,12 +109,12 @@ export type AnalyticsEvent =
   | "highlight_created"
   | "tts_requested"
   | "theme_changed"        // user switches theme
-  | "view_mode_changed"    // user switches reader/original/iframe
-  | "toolbar_click"        // floating sidebar button clicked
-  | "annotation_action";   // highlight edit, delete, export
+  | "view_mode_changed";   // user switches reader/original/iframe (also fires on article load for default)
 ```
 
 Every event is automatically enriched with: `is_premium`, `device_type`, `locale`.
+
+`article_loaded` also includes `view_mode` (markdown/html/iframe) for per-article view tracking.
 
 ---
 
@@ -154,7 +155,9 @@ Fires when ALL sources fail for a URL.
 | `placement` | string | UI slot — snake_case (see placements below) |
 | `ad_provider` | string | `zeroclick` or `gravity` |
 
-Tracked inside `fireClick()` in `lib/hooks/use-gravity-ad.ts` — **single source of truth**. Components only call `fireClick(ad, "placement_name", index)`. The hook handles both `/api/px` (billing logs) and PostHog `ad_click` (analytics). This prevents naming drift between billing and analytics.
+Tracked at the **component level** in `components/ads/gravity-ad.tsx`. The `GravityAd` component receives a required `placement` prop and fires `track("ad_click", { placement, ad_provider })` on every click via `useAnalytics()`. This guarantees every click is tracked regardless of how parents wire `onClick` callbacks.
+
+`fireClick()` in `lib/hooks/use-gravity-ad.ts` is a separate concern — it sends a beacon to `/api/px` for server-side billing logs only (no PostHog).
 
 `ad_impression` is NOT tracked in PostHog — impression billing is handled directly by Gravity/ZeroClick SDKs via `fireImpression()`. Only clicks matter for placement optimization.
 
@@ -182,22 +185,20 @@ Tracked inside `fireClick()` in `lib/hooks/use-gravity-ad.ts` — **single sourc
 | `highlight_created` | Text highlighted | `text_length`, `color` |
 | `tts_requested` | TTS load button | `voice`, `article_url` |
 | `theme_changed` | User switches theme | `theme` (e.g., `light`, `dark`, `magic-blue`) |
-| `view_mode_changed` | User switches view mode | `view_mode` (`markdown` / `html` / `iframe`) |
-| `toolbar_click` | Floating toolbar button clicked | `action` (`open_original` / `listen` / `history` / `reader_settings` / `settings`) |
-| `annotation_action` | Highlight edit, delete, export | `action` (`edit_note` / `delete` / `export`), `highlight_count` (export only) |
+| `view_mode_changed` | Article load + user switches view mode | `view_mode` (`markdown` / `html` / `iframe`) |
 
 ---
 
 ## Event Volume & Cost (30K DAU)
 
-11 custom events + heatmaps (no $pageview, no $pageleave, no ad_impression):
+9 custom events + heatmaps (no $pageview, no $pageleave, no ad_impression):
 
 | Event | Est. per session | Daily (30K DAU, 1.5 sessions) |
 |-------|-----------------|-------------------------------|
 | `article_loaded` | 1 | 45,000 |
 | `article_error` | 0.05 | 2,250 |
 | `ad_click` | 0.05 | 2,250 |
-| Feature events (8) | 0.4 | 18,000 |
+| Feature events (6) | 0.3 | 13,500 |
 | Heatmap data | ~1-2 | ~67,500 |
 | **Total** | **~3** | **~126,000/day** |
 
@@ -274,7 +275,7 @@ function MyComponent() {
 }
 ```
 
-**For ad events:** Do NOT call `track("ad_click")` directly from components. Use `fireClick(ad, "placement_name", index)` from `useGravityAd` — it handles both `/api/px` billing and PostHog analytics in one call. This prevents placement name drift between systems.
+**For ad events:** `ad_click` is tracked automatically by the `GravityAd` component — do NOT call `track("ad_click")` anywhere else. Each `<GravityAd>` receives a `placement` prop that determines the PostHog placement value. `fireClick()` from `useGravityAd` is for server billing only (`/api/px`) and does NOT fire PostHog events.
 
 ---
 
@@ -309,4 +310,6 @@ Previously caused ~250k events/day. All removed:
 - **Session recording** — recorded every session
 - **`article_submitted`** — redundant with `article_loaded` + `article_error` (every submit leads to one or the other)
 - **`highlights_exported`** — `highlight_created` already tracks adoption; export is a secondary action
+- **`toolbar_click`** — low-signal vanity data (clicking a button ≠ using a feature); actual outcomes already tracked by `tts_requested`, `theme_changed`, `view_mode_changed`
+- **`annotation_action`** — `highlight_created` already tracks adoption; edit/delete/export are secondary actions
 - Events removed: `url_validation_error`, `chat_opened`, `settings_opened`, `chat_suggestion_clicked`, `chat_message_copied`, `chat_cleared`, `setting_changed`, `ad_loaded`, `tts_played`, `tts_paused`, `tts_voice_changed`, `feature_used`

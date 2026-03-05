@@ -11,13 +11,15 @@
  * 5. Great at every breakpoint
  */
 
-import { useLayoutEffect, useRef, useState } from "react";
+import { useCallback, useLayoutEffect, useRef, useState } from "react";
 import { X } from "@/components/ui/icons";
 import { cn } from "@/lib/utils";
+import { useAnalytics } from "@/lib/hooks/use-analytics";
 import type { GravityAd as GravityAdType } from "@/lib/hooks/use-gravity-ad";
 
 interface GravityAdProps {
   ad: GravityAdType;
+  placement: string;
   onVisible: () => void;
   onDismiss?: () => void;
   onClick?: () => void;
@@ -123,10 +125,16 @@ function AdFavicon({
   );
 }
 
-export function GravityAd({ ad, onVisible, onDismiss, onClick, className, variant = "default" }: GravityAdProps) {
+export function GravityAd({ ad, placement, onVisible, onDismiss, onClick, className, variant = "default" }: GravityAdProps) {
   const adRef = useRef<HTMLAnchorElement>(null);
   const adWrapperRef = useRef<HTMLDivElement>(null);
   const [hasTrackedImpression, setHasTrackedImpression] = useState(false);
+  const { track } = useAnalytics();
+
+  const handleClick = useCallback(() => {
+    track("ad_click", { placement, ad_provider: ad.ad_provider });
+    onClick?.();
+  }, [track, placement, ad.ad_provider, onClick]);
 
   // Reset on ad change
   useLayoutEffect(() => {
@@ -170,7 +178,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
         href={ad.clickUrl}
         target="_blank"
         rel="sponsored noopener"
-        onClick={onClick}
+        onClick={handleClick}
         className={cn(
           "flex items-center gap-3 bg-card",
           "px-3 py-2.5",
@@ -207,7 +215,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
           href={ad.clickUrl}
           target="_blank"
           rel="sponsored noopener"
-          onClick={onClick}
+          onClick={handleClick}
           className="flex-1 flex items-center gap-1.5 min-w-0 group rounded-md p-1 -m-1 hover:bg-muted/40 transition-colors"
         >
           <div className="size-5 rounded overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
@@ -236,7 +244,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
           href={ad.clickUrl}
           target="_blank"
           rel="sponsored noopener"
-          onClick={onClick}
+          onClick={handleClick}
           className="flex-1 flex items-start gap-2.5 min-w-0 rounded-lg p-2 -m-2 hover:bg-muted/40 transition-colors"
         >
           <div className="size-8 rounded-lg overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
@@ -270,7 +278,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
         href={ad.clickUrl}
         target="_blank"
         rel="sponsored noopener"
-        onClick={onClick}
+        onClick={handleClick}
         className={cn(
           "group block max-w-md mx-auto w-full",
           "rounded-xl px-4 py-3 transition-colors hover:bg-muted/25",
@@ -306,7 +314,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
         href={ad.clickUrl}
         target="_blank"
         rel="sponsored noopener"
-        onClick={onClick}
+        onClick={handleClick}
         className={cn(
           "group text-center text-[11px] text-muted-foreground/70 transition-colors hover:text-muted-foreground",
           className
@@ -333,7 +341,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
           href={ad.clickUrl}
           target="_blank"
           rel="sponsored noopener"
-          onClick={onClick}
+          onClick={handleClick}
           className="flex-1 flex items-center gap-2 min-w-0 group rounded-lg px-2 py-1.5 -mx-1 hover:bg-muted/40 transition-colors"
         >
           <div className="size-6 rounded-md overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
@@ -366,7 +374,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
             href={ad.clickUrl}
             target="_blank"
             rel="sponsored noopener"
-            onClick={onClick}
+            onClick={handleClick}
             className="block px-3 py-2.5 active:bg-muted/30 transition-colors"
           >
             <div className="flex items-center gap-2 mb-1.5">
@@ -397,7 +405,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
             href={ad.clickUrl}
             target="_blank"
             rel="sponsored noopener"
-            onClick={onClick}
+            onClick={handleClick}
             className="flex items-start gap-3 p-3"
           >
             <div className="size-10 rounded-xl overflow-hidden bg-white shrink-0 shadow-sm ring-1 ring-black/[0.06]">
@@ -433,7 +441,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
           href={ad.clickUrl}
           target="_blank"
           rel="sponsored noopener"
-          onClick={onClick}
+          onClick={handleClick}
           className="flex items-center gap-2 sm:gap-3 group rounded-lg p-2 -m-2 hover:bg-muted/30 transition-colors"
         >
           <div className="size-8 sm:size-9 rounded-lg overflow-hidden bg-white shrink-0 ring-1 ring-border/20">
@@ -485,7 +493,7 @@ export function GravityAd({ ad, onVisible, onDismiss, onClick, className, varian
         href={ad.clickUrl}
         target="_blank"
         rel="sponsored noopener"
-        onClick={onClick}
+        onClick={handleClick}
         className="block"
       >
         <p className="text-[13px] font-medium text-foreground leading-relaxed group-hover:text-primary transition-colors">

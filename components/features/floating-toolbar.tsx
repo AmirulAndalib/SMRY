@@ -263,7 +263,6 @@ export function FloatingToolbar({
 
   // Open original URL
   const openOriginal = () => {
-    track("toolbar_click", { action: "open_original" });
     window.open(originalUrl, "_blank", "noopener,noreferrer");
   };
 
@@ -332,7 +331,7 @@ export function FloatingToolbar({
         }
         label={isTTSActive ? "Stop listening" : "Listen"}
         shortcut="L"
-        onClick={() => { track("toolbar_click", { action: "listen" }); onTTSToggle?.(); }}
+        onClick={() => { onTTSToggle?.(); }}
         isActive={isTTSActive}
       />
 
@@ -350,7 +349,6 @@ export function FloatingToolbar({
             "text-muted-foreground"
           )}
           aria-label="Reading History"
-          onClick={() => { track("toolbar_click", { action: "history" }); }}
         >
           <History className="size-5" />
         </Link>
@@ -365,7 +363,7 @@ export function FloatingToolbar({
             side="right"
             align="center"
             open={styleOptionsOpen}
-            onOpenChange={(open) => { if (open) track("toolbar_click", { action: "reader_settings" }); onStyleOptionsOpenChange?.(open); }}
+            onOpenChange={onStyleOptionsOpenChange}
           />
         </div>
       </Tooltip>
@@ -375,7 +373,7 @@ export function FloatingToolbar({
         icon={<Settings className="size-5" />}
         label="Settings"
         shortcut=","
-        onClick={() => { track("toolbar_click", { action: "settings" }); onOpenSettings(); }}
+        onClick={onOpenSettings}
         tooltipDisabled={anyPanelOpen}
       />
 

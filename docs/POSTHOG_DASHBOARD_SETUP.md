@@ -2,7 +2,7 @@
 
 Complete step-by-step guide to create all PostHog dashboards for SMRY.
 
-**Current events:** 11 custom events + heatmaps (no $pageview — DataBuddy handles visitors).
+**Current events:** 9 custom events + heatmaps (no $pageview — DataBuddy handles visitors).
 
 **All events are auto-enriched with:** `is_premium`, `device_type`, `locale`.
 
@@ -16,11 +16,11 @@ Complete step-by-step guide to create all PostHog dashboards for SMRY.
 
 ---
 
-## Quick Reference: All 11 Events
+## Quick Reference: All 9 Events
 
 | Event | When it fires | Key Properties |
 |-------|---------------|----------------|
-| `article_loaded` | Article renders successfully | `source`, `hostname`, `fetch_ms`, `classified`, `classification_outcome`, `sources_succeeded`, `sources_failed` (comma-separated string) |
+| `article_loaded` | Article renders successfully | `source`, `hostname`, `fetch_ms`, `classified`, `classification_outcome`, `sources_succeeded`, `sources_failed` (comma-separated string), `view_mode` |
 | `article_error` | All extraction sources fail | `error_name`, `hostname` |
 | `ad_click` | User clicks an ad | `placement`, `ad_provider` |
 | `chat_message_sent` | User sends a chat message | `message_length`, `language` |
@@ -28,9 +28,7 @@ Complete step-by-step guide to create all PostHog dashboards for SMRY.
 | `highlight_created` | User highlights text | `text_length`, `color` |
 | `tts_requested` | User requests text-to-speech | `voice`, `article_url` |
 | `theme_changed` | User switches theme | `theme` |
-| `view_mode_changed` | User switches view mode | `view_mode` (markdown / html / iframe) |
-| `toolbar_click` | Floating toolbar button clicked | `action` (open_original / listen / history / reader_settings / settings) |
-| `annotation_action` | Highlight edit, delete, export | `action` (edit_note / delete / export), `highlight_count` |
+| `view_mode_changed` | Article load + user switches view mode | `view_mode` (markdown / html / iframe) |
 
 ---
 
@@ -196,7 +194,9 @@ Example insight: "nytimes.com has 95% success rate, avg latency 2.3s, winning so
 
 ### How ad click tracking works
 
-`ad_click` events are tracked inside `fireClick()` in `lib/hooks/use-gravity-ad.ts`. This is the **single source of truth** — components only call `fireClick(ad, "placement_name", index)` and the hook handles PostHog tracking. No duplicate tracking possible.
+`ad_click` is tracked at the **component level** in `components/ads/gravity-ad.tsx`. Every `<GravityAd>` receives a required `placement` prop and fires `track("ad_click", { placement, ad_provider })` on click via `useAnalytics()`. This guarantees every click is tracked regardless of parent wiring — no missed placements, no duplicates.
+
+`fireClick()` in `useGravityAd` is a **separate concern** for server billing logs (`/api/px`) and does NOT fire PostHog events.
 
 ### Step 1 — Create the dashboard
 
@@ -329,23 +329,7 @@ Shows which voices are most popular.
 5. Display: **Pie chart**
 6. **Save** → name: `View Mode Usage` → add to `Feature Adoption`
 
-### Step 8 — "Toolbar Engagement"
-
-1. **+ Add insight** → **+ New insight** → **Trends**
-2. Event: `toolbar_click`, Aggregation: **Total count**
-3. **+ Add breakdown** → `action`
-4. Date range: **Last 30 days**
-5. **Save** → name: `Toolbar Engagement` → add to `Feature Adoption`
-
-### Step 9 — "Annotation Activity"
-
-1. **+ Add insight** → **+ New insight** → **Trends**
-2. Event: `annotation_action`, Aggregation: **Total count**
-3. **+ Add breakdown** → `action`
-4. Date range: **Last 30 days**
-5. **Save** → name: `Annotation Activity` → add to `Feature Adoption`
-
-**Dashboard 4 done — 8 cards.**
+**Dashboard 4 done — 6 cards.**
 
 ---
 
@@ -439,8 +423,8 @@ Alerts notify you when something breaks or degrades.
 | 1 | SMRY Overview | 3 | Is everything working? How many users? |
 | 2 | Top Sites | 7 | Which sites work/fail? Which source wins? |
 | 3 | Ad Clicks | 4 | Which ads get clicked? Provider comparison |
-| 4 | Feature Adoption | 8 | Which features do people use? |
+| 4 | Feature Adoption | 6 | Which features do people use? |
 | 5 | Retention | 2 | Are users coming back? |
 | 6 | Heatmaps | built-in | Where do users click/scroll? |
 
-**Total: 24 insight cards across 5 custom dashboards + built-in heatmaps.**
+**Total: 22 insight cards across 5 custom dashboards + built-in heatmaps.**

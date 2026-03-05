@@ -20,11 +20,13 @@ interface MobileChatDrawerProps {
   articleTitle?: string;
   /** Ad shown in the header area */
   chatAd?: GravityAdType | null;
+  chatAdPlacement?: string;
   onChatAdVisible?: () => void;
   onChatAdClick?: () => void;
   onChatAdDismiss?: () => void;
   /** Ad shown inline after AI responses */
   inlineChatAd?: GravityAdType | null;
+  inlineChatAdPlacement?: string;
   onInlineChatAdVisible?: () => void;
   onInlineChatAdClick?: () => void;
   // Thread/history props
@@ -170,10 +172,12 @@ export const MobileChatDrawer = forwardRef<MobileChatDrawerHandle, MobileChatDra
   articleContent,
   articleTitle,
   chatAd,
+  chatAdPlacement,
   onChatAdVisible,
   onChatAdClick,
   onChatAdDismiss: _onChatAdDismiss,
   inlineChatAd,
+  inlineChatAdPlacement,
   onInlineChatAdVisible,
   onInlineChatAdClick,
   isPremium = false,
@@ -433,9 +437,11 @@ export const MobileChatDrawer = forwardRef<MobileChatDrawerHandle, MobileChatDra
                   onMessagesChange={onMessagesChange}
                   isKeyboardOpen={isKeyboardOpen}
                   headerAd={chatAd}
+                  headerAdPlacement={chatAdPlacement}
                   onHeaderAdVisible={onChatAdVisible}
                   onHeaderAdClick={onChatAdClick}
                   ad={inlineChatAd}
+                  adPlacement={inlineChatAdPlacement}
                   onAdVisible={onInlineChatAdVisible}
                   onAdClick={onInlineChatAdClick}
                 />

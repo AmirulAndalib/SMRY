@@ -11,7 +11,6 @@ import { useCallback, useMemo, useSyncExternalStore } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { getApiUrl } from "@/lib/api/config";
 import { useAuth, useUser } from "@clerk/nextjs";
-import { useAnalytics } from "@/lib/hooks/use-analytics";
 import type { ContextAd, ContextDevice, ContextRequest, ContextResponse } from "@/types/api";
 
 const SESSION_ID_KEY = "gravity-session-id";
@@ -186,7 +185,6 @@ export function useGravityAd({
 }: UseGravityAdOptions): UseGravityAdResult {
   const { getToken } = useAuth();
   const { user } = useUser();
-  const { track } = useAnalytics();
 
   // Use useSyncExternalStore for SSR-safe immediate client values
   // Server returns empty/null, client returns real values immediately (no effect delay)
@@ -392,10 +390,7 @@ export function useGravityAd({
   const fireClick = useCallback((targetAd?: ContextAd, placement?: string, adIndex?: number) => {
     const ad = targetAd ?? query.data?.[0];
     sendTrackingEvent("click", ad ?? null, placement, adIndex);
-    if (ad) {
-      track("ad_click", { placement: placement || "unknown", ad_provider: ad.ad_provider });
-    }
-  }, [query.data, sendTrackingEvent, track]);
+  }, [query.data, sendTrackingEvent]);
 
   const fireDismiss = useCallback((targetAd?: ContextAd, placement?: string, adIndex?: number) => {
     const ad = targetAd ?? query.data?.[0];

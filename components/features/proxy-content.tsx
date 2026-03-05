@@ -1267,8 +1267,12 @@ export function ProxyContent({ url }: ProxyContentProps) {
       sources_succeeded: src?.succeeded?.length ?? 0,
       sources_failed: (src?.failed ?? []).join(","),
       fetch_ms: articleQuery.data?.fetch_ms,
+      view_mode: viewMode,
     });
-  }, [firstSuccessfulArticle, url, source, trackArticle, articleQuery.data?.classification, articleQuery.data?.sources, articleQuery.data?.fetch_ms]);
+
+    // Track initial view mode so the pie chart includes default "markdown"
+    track("view_mode_changed", { view_mode: viewMode });
+  }, [firstSuccessfulArticle, url, source, trackArticle, track, viewMode, articleQuery.data?.classification, articleQuery.data?.sources, articleQuery.data?.fetch_ms]);
 
   // Track article fetch errors
   useEffect(() => {
@@ -2028,10 +2032,12 @@ export function ProxyContent({ url }: ProxyContentProps) {
                       isFullScreen={isFullScreen}
                       onFullScreenChange={setIsFullScreen}
                       inlineAd={!isPremium ? inlineAd : null}
+                      inlineAdPlacement="article_inline"
                       onInlineAdVisible={inlineAd ? onInlineAdVisible : undefined}
                       onInlineAdClick={inlineAd ? onInlineAdClick : undefined}
                       showInlineAd={!isPremium}
                       footerAd={!isPremium ? footerAd : null}
+                      footerAdPlacement="article_footer"
                       onFooterAdVisible={footerAd ? onFooterAdVisible : undefined}
                       onFooterAdClick={footerAd ? onFooterAdClick : undefined}
                       onAskAI={handleAskAI}
@@ -2045,6 +2051,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                   <div className="fixed bottom-4 right-4 z-40 w-[280px] lg:w-[320px] xl:w-[360px] max-w-[calc(100vw-2rem)]">
                     <GravityAd
                       ad={sidebarAd}
+                      placement="article_sidebar"
                       onVisible={() => { fireImpression(sidebarAd, "article_sidebar", 0); }}
                       onClick={() => { fireClick(sidebarAd, "article_sidebar", 0); }}
                       onDismiss={() => {
@@ -2111,9 +2118,11 @@ export function ProxyContent({ url }: ProxyContentProps) {
                       onMessagesChange={isPremium ? handleMessagesChange : undefined}
                       activeThreadTitle={_activeThread?.title}
                       headerAd={!isPremium ? chatAd : null}
+                      headerAdPlacement="chat_top"
                       onHeaderAdVisible={chatAd ? () => { fireImpression(chatAd, "chat_top", 3); } : undefined}
                       onHeaderAdClick={chatAd ? () => { fireClick(chatAd, "chat_top", 3); } : undefined}
                       ad={!isPremium ? (inlineAd ?? footerAd) : null}
+                      adPlacement="chat_middle"
                       onAdVisible={inlineAd ? () => { fireImpression(inlineAd, "chat_middle", 1); } : footerAd ? () => { fireImpression(footerAd, "chat_middle", 2); } : undefined}
                       onAdClick={inlineAd ? () => { fireClick(inlineAd, "chat_middle", 1); } : footerAd ? () => { fireClick(footerAd, "chat_middle", 2); } : undefined}
                       microAd={!isPremium ? microAd : null}
@@ -2232,10 +2241,12 @@ export function ProxyContent({ url }: ProxyContentProps) {
                     isFullScreen={isFullScreen}
                     onFullScreenChange={setIsFullScreen}
                     inlineAd={!isPremium ? inlineAd : null}
+                    inlineAdPlacement="article_inline"
                     onInlineAdVisible={inlineAd ? onInlineAdVisible : undefined}
                     onInlineAdClick={inlineAd ? onInlineAdClick : undefined}
                     showInlineAd={!isPremium}
                     footerAd={!isPremium ? footerAd : null}
+                    footerAdPlacement="article_footer"
                     onFooterAdVisible={footerAd ? onFooterAdVisible : undefined}
                     onFooterAdClick={footerAd ? onFooterAdClick : undefined}
                     onAskAI={handleAskAI}
@@ -2252,9 +2263,11 @@ export function ProxyContent({ url }: ProxyContentProps) {
                 articleContent={articleTextContent || ""}
                 articleTitle={articleTitle}
                 chatAd={!isPremium ? mobileChatAd : null}
+                chatAdPlacement="mobile_chat_top"
                 onChatAdVisible={mobileChatAd ? () => { fireImpression(mobileChatAd, "mobile_chat_top", gravityAds.indexOf(mobileChatAd)); } : undefined}
                 onChatAdClick={mobileChatAd ? () => { fireClick(mobileChatAd, "mobile_chat_top", gravityAds.indexOf(mobileChatAd)); } : undefined}
                 inlineChatAd={!isPremium ? (inlineAd ?? footerAd) : null}
+                inlineChatAdPlacement="mobile_chat_middle"
                 onInlineChatAdVisible={inlineAd ? () => { fireImpression(inlineAd, "mobile_chat_middle", 1); } : footerAd ? () => { fireImpression(footerAd, "mobile_chat_middle", 2); } : undefined}
                 onInlineChatAdClick={inlineAd ? () => { fireClick(inlineAd, "mobile_chat_middle", 1); } : footerAd ? () => { fireClick(footerAd, "mobile_chat_middle", 2); } : undefined}
                 isPremium={isPremium}
@@ -2290,6 +2303,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                 >
                   <GravityAd
                     ad={sidebarAd}
+                    placement="mobile_article_bottom"
                     variant="mobile"
                     onVisible={() => { fireImpression(sidebarAd, "mobile_article_bottom", 0); }}
                     onClick={() => { fireClick(sidebarAd, "mobile_article_bottom", 0); }}

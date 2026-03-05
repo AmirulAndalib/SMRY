@@ -29,9 +29,11 @@ interface TabbedSidebarProps {
   activeThreadTitle?: string;
   // Ads
   headerAd?: GravityAdType | null;
+  headerAdPlacement?: string;
   onHeaderAdVisible?: () => void;
   onHeaderAdClick?: () => void;
   ad?: GravityAdType | null;
+  adPlacement?: string;
   onAdVisible?: () => void;
   onAdClick?: () => void;
   microAd?: GravityAdType | null;
@@ -69,9 +71,11 @@ export const TabbedSidebar = forwardRef<TabbedSidebarHandle, TabbedSidebarProps>
       activeThreadTitle,
       // Ads
       headerAd,
+      headerAdPlacement,
       onHeaderAdVisible,
       onHeaderAdClick,
       ad,
+      adPlacement,
       onAdVisible,
       onAdClick,
       microAd,
@@ -205,9 +209,11 @@ export const TabbedSidebar = forwardRef<TabbedSidebarHandle, TabbedSidebarProps>
               onMessagesChange={onMessagesChange}
               activeThreadTitle={activeThreadTitle}
               headerAd={headerAd}
+              headerAdPlacement={headerAdPlacement}
               onHeaderAdVisible={onHeaderAdVisible}
               onHeaderAdClick={onHeaderAdClick}
               ad={ad}
+              adPlacement={adPlacement}
               onAdVisible={onAdVisible}
               onAdClick={onAdClick}
               microAd={microAd}

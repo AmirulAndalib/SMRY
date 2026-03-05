@@ -6,8 +6,6 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { HIGHLIGHT_COLORS } from "@/components/features/highlight-popover";
 import type { Highlight } from "@/lib/hooks/use-highlights";
-import { useAnalytics } from "@/lib/hooks/use-analytics";
-
 /**
  * Map highlight color name to the same Tailwind classes used on actual <mark> elements.
  * Uses theme-aware bg variants so the card text matches the in-article highlight.
@@ -102,7 +100,6 @@ export const AnnotationCard = React.memo(function AnnotationCard({
   onUpdateNote,
   onChangeColor,
 }: AnnotationCardProps) {
-  const { track } = useAnalytics();
   const [editingNote, setEditingNote] = useState(false);
   const [noteText, setNoteText] = useState(highlight.note || "");
 
@@ -133,9 +130,8 @@ export const AnnotationCard = React.memo(function AnnotationCard({
 
   const handleSaveNote = useCallback(() => {
     onUpdateNote(highlight.id, { note: noteText.trim() || undefined });
-    track("annotation_action", { action: "edit_note" });
     setEditingNote(false);
-  }, [highlight.id, noteText, onUpdateNote, track]);
+  }, [highlight.id, noteText, onUpdateNote]);
 
   const colorObj = HIGHLIGHT_COLORS.find((c) => c.name === highlight.color) || HIGHLIGHT_COLORS[0];
   const bgClass = COLOR_BG[highlight.color] || COLOR_BG.yellow;
@@ -281,7 +277,7 @@ export const AnnotationCard = React.memo(function AnnotationCard({
 
               {/* Delete */}
               <button
-                onClick={() => { track("annotation_action", { action: "delete" }); onDelete(highlight.id); }}
+                onClick={() => onDelete(highlight.id)}
                 className="p-1 rounded-md text-muted-foreground/60 hover:text-destructive hover:bg-destructive/10 transition-colors"
                 title="Delete"
               >
