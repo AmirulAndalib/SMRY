@@ -41,7 +41,7 @@ XGBoost ML classifier that evaluates HTML extraction quality from each source (s
 
 All 3 extraction sources run to completion via `Promise.allSettled()`. No early abort, no speed bias. Every source gets equal opportunity regardless of how fast it responds.
 
-Classification runs in parallel with Readability parsing inside each fetch function (adds 0ms to critical path). The single-source `/article` endpoint skips classification entirely via a `classify` flag — only `/article/auto` uses it.
+Classification runs in parallel with Readability parsing inside each fetch function (adds 0ms to critical path).
 
 ### Classify Phase
 

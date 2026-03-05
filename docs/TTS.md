@@ -18,13 +18,12 @@ Browser                          Next.js Proxy              Elysia API Server
                                                              ├─ Article cache hit → instant replay
                                                              ├─ Split into ~1800-char chunks
                                                              ├─ Per-chunk LRU cache lookup (SHA-256 key)
-                                                             ├─ Per-chunk Redis cache lookup (L3)
                                                              ├─ Cache hits → skip synthesis
                                                              ├─ Request dedup (pendingGenerations map)
                                                              ├─ Cache misses → parallel synthesis (max 3)
                                                              │   └─ Inworld TTS API (REST)
                                                              │       → MP3 audio + character alignment
-                                                             ├─ Write to memory + Redis caches
+                                                             ├─ Write to memory cache
                                                              ├─ Concat audio + Xing VBR header, merge alignment
 2. ← JSON response          ←    Forward JSON          ←    └─ Return { audioBase64, alignment, durationMs }
 
@@ -37,7 +36,7 @@ Browser                          Next.js Proxy              Elysia API Server
 ### Key design decisions
 
 - **Single JSON response (not SSE)**: One API call returns all audio + alignment as JSON. Simpler than SSE streaming — the multi-tier cache makes subsequent plays instant.
-- **Seven-tier caching**: L0 client memory → L1 IndexedDB (7d, 50 entries) → L2 article LRU (100MB, 2h) → L2.5 Redis article (7d) → L3 chunk LRU (150MB, 1h) → L3.5 Redis chunk (7d) → L4 Inworld API. Redis survives server restarts.
+- **Five-tier caching**: L0 client memory → L1 IndexedDB (7d, 50 entries) → L2 article LRU (100MB, 2h) → L3 chunk LRU (150MB, 1h) → L4 Inworld API. Redis TTS cache removed (Mar 2026) — in-memory LRU + client IndexedDB provide sufficient hit rates without Upstash storage cost.
 - **Client-side voice cache**: In-memory `Map<voiceId, {blobUrl, alignment, durationMs}>` so switching between previously-heard voices is instant — no API call, no IndexedDB lookup.
 - **Voice tier gating**: Free users restricted to Ashley + Dennis (2 voices). Premium users get all 10. Enforced server-side (403) and client-side (UI lock icons, redirect to /pricing).
 - **1800-char chunks**: ~1800-char chunks on sentence boundaries (Inworld limit: 2000 chars with safety margin). Fewer API calls = lower cost + better prosody.
@@ -67,7 +66,6 @@ Browser                          Next.js Proxy              Elysia API Server
 |------|---------|
 | `lib/tts-provider.ts` | Inworld AI TTS client — REST API, character→word alignment, MP3 frame parser (`parseMp3DurationMs`), voice presets, tier gating (`isVoiceAllowed`) |
 | `server/routes/tts.ts` | Elysia endpoint — auth, voice gating, rate limiting, concurrency, multi-tier caching, text chunking |
-| `lib/tts-redis-cache.ts` | Redis L3 chunk cache — gzip-compressed, 7-day TTL, batch lookups, silent degradation |
 | `lib/tts-concurrency.ts` | Bounded concurrency limiter with per-user queuing, abort support, /health stats |
 | `lib/tts-chunk.ts` | Shared text cleaning (`cleanTextForTTS`), chunking (`splitTTSChunks`), SHA-256 hashing |
 | `lib/tts-text.ts` | DOM text extraction (`extractTTSText`), word position mapping (`buildWordPositions`), fuzzy timing match (`matchTimingsToPositions` — legacy, unused by highlight hook) |
@@ -100,17 +98,13 @@ Browser                          Next.js Proxy              Elysia API Server
 L0:   Client in-memory voice cache  (per session)        — instant voice switching, no async
 L1:   Client IndexedDB              (7d TTL, 50 entries)  — per-user, no server call
 L2:   Server article LRU            (100MB, 2h TTL)       — instant replay, no chunking
-L2.5: Redis article cache           (7d TTL, 10MB/entry)  — cross-device sync (premium)
 L3:   Server chunk LRU              (150MB, 1h TTL)       — per-chunk, partial hits
-L3.5: Redis chunk cache             (7d TTL, 2MB/chunk)   — survives restarts
 L4:   Inworld TTS API               (last resort)         — actual credit spend
 ```
 
 ### Write-through promotion
-- Redis article hit → promoted to server article LRU (L2.5 → L2)
-- Redis chunk hit → promoted to server chunk LRU (L3.5 → L3)
 - IndexedDB hit → promoted to client in-memory cache (L1 → L0)
-- API result → written to all server caches (L2 + L2.5 + L3 + L3.5)
+- API result → written to server caches (L2 + L3)
 - Client receives result → written to L0 + L1
 
 ## Voice Tiers
@@ -352,18 +346,6 @@ When the TTS player opens on mobile:
 | Scope | Server-side LRU |
 | Effect | Instant replay — zero processing, zero API calls |
 
-**L2.5: Redis article cache** (cross-device sync for premium):
-
-| Property | Value |
-|----------|-------|
-| Cache key | `tts:article:v2:{sha256hex}` |
-| TTL | 7 days |
-| Max per article | 10 MB |
-| Compression | gzip via `compressAsync`/`decompressAsync` |
-| Scope | Redis (Upstash) |
-| Effect | Premium users get same audio on all devices |
-| Write | Premium-only (fire-and-forget after generation) |
-
 **L3: Per-chunk cache** (individual chunk audio):
 
 | Property | Value |
@@ -373,18 +355,6 @@ When the TTS player opens on mobile:
 | TTL | 1 hour |
 | Scope | Server-side LRU |
 | Effect | Cached chunks skip synthesis + concurrency slot |
-
-**L3.5: Redis chunk cache** (persistent across restarts):
-
-| Property | Value |
-|----------|-------|
-| Cache key | `tts:chunk:{sha256hex}` |
-| TTL | 7 days |
-| Max per chunk | 2 MB |
-| Compression | gzip via `compressAsync`/`decompressAsync` |
-| Scope | Redis (Upstash) |
-| Effect | Survives server restarts, batch lookups via pipeline |
-| Degradation | Silent — errors treated as cache miss |
 
 ### Memory Safety
 
@@ -398,7 +368,6 @@ When the TTS player opens on mobile:
 | Per-chunk timeout | 60s `AbortSignal.timeout` per Inworld call |
 | Per-request tracking | `startMemoryTrack()` instruments every TTS synthesis with checkpoints |
 | Client-side cache | IndexedDB, max 50 entries, 7-day TTL, evicts oldest 10 on overflow |
-| Redis cache | 2MB per-chunk cap, 10MB per-article cap, gzip compression, silent degradation |
 | Intermediate buffers | Nulled after use to allow GC during generation |
 | Large response warning | Logs warning when audio > 20MB |
 
@@ -440,7 +409,7 @@ Per client tab:
 | Client disconnects mid-generation | AbortSignal cancels Inworld request, releases slot |
 | Single chunk hangs | 60s per-chunk timeout aborts that call; error propagated |
 | Premium voice + free user | 403 "Premium voice requires subscription", UI shows upgrade prompt |
-| Redis down | Silent degradation — treated as cache miss, falls through to Inworld |
+| Redis down | Silent degradation — usage tracking falls back to in-memory cache |
 
 ## Configuration
 

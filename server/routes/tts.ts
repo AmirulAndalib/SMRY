@@ -32,7 +32,6 @@ import {
   type ChunkAlignment,
   type MergedAlignment,
 } from "../../lib/tts-provider";
-import { TTSRedisCache } from "../../lib/tts-redis-cache";
 import { getAuthInfo } from "../middleware/auth";
 import { createLogger } from "../../lib/logger";
 import { startMemoryTrack, logLargeAllocation, registerTTSStatsProvider } from "../../lib/memory-tracker";
@@ -210,7 +209,6 @@ registerTTSStatsProvider({
       tts_article_cache_entries: as.entries,
       tts_article_cache_mb: as.totalSizeMB,
       tts_article_cache_max_mb: as.maxSizeMB,
-      tts_redis_cache: ttsRedisCache?.stats ?? null,
       tts_pending_generations: pendingGenerations.size,
     };
   },
@@ -262,12 +260,6 @@ try {
   }
 } catch {
   logger.warn("Redis not available for TTS usage tracking");
-}
-
-// Redis-backed TTS chunk cache (L3 — survives restarts)
-let ttsRedisCache: TTSRedisCache | null = null;
-if (redis) {
-  ttsRedisCache = new TTSRedisCache(redis);
 }
 
 // In-memory fallback for daily limits when Redis is down
@@ -532,41 +524,7 @@ async function generateCombined(
     }
   }
 
-  // L3: Check Redis cache for remaining misses
-  if (uncachedIndices.length > 0 && ttsRedisCache) {
-    const redisKeys = uncachedIndices.map((i) => chunkKeys[i]);
-    const redisResults = await ttsRedisCache.getBatch(redisKeys);
-    const stillUncached: number[] = [];
-
-    for (let j = 0; j < uncachedIndices.length; j++) {
-      const redisHit = redisResults[j];
-      if (redisHit) {
-        const idx = uncachedIndices[j];
-        results[idx] = {
-          audio: redisHit.audio,
-          alignment: redisHit.alignment,
-          durationMs: redisHit.durationMs,
-          fromCache: true,
-        };
-        // Promote to in-memory cache (write-through)
-        chunkCache.set(chunkKeys[idx], {
-          audio: redisHit.audio,
-          alignment: redisHit.alignment,
-          durationMs: redisHit.durationMs,
-          size: redisHit.audio.length,
-          createdAt: Date.now(),
-        });
-      } else {
-        stillUncached.push(uncachedIndices[j]);
-      }
-    }
-
-    // Replace uncachedIndices with what Redis didn't have
-    uncachedIndices.length = 0;
-    uncachedIndices.push(...stillUncached);
-  }
-
-  // L4: Generate uncached chunks via Inworld with bounded concurrency
+  // L3: Generate uncached chunks via Inworld with bounded concurrency
   if (uncachedIndices.length > 0) {
     const tasks = uncachedIndices.map((i) => async () => {
       if (signal?.aborted) throw new Error("Aborted");
@@ -583,10 +541,6 @@ async function generateCombined(
           createdAt: Date.now(),
         });
 
-        // Write-through to L3 (Redis) — fire-and-forget
-        if (ttsRedisCache) {
-          ttsRedisCache.set(chunkKeys[i], result.audioBuffer, result.alignment, result.durationMs).catch(() => {});
-        }
       }
 
       return {
@@ -753,70 +707,12 @@ export const ttsRoutes = new Elysia()
         );
       }
 
-      // --- L1.5: Redis article cache (cross-device sync for premium users) ---
-      if (ttsRedisCache) {
-        const redisArticle = await ttsRedisCache.getArticle(articleKey);
-        if (redisArticle) {
-          logger.debug(
-            { userId: auth.userId, textLength: cleanedText.length, voice: voiceId },
-            "TTS Redis article cache hit — cross-device replay",
-          );
-          // Promote to in-memory article cache
-          articleCache.set(articleKey, {
-            audioBuffer: redisArticle.audio,
-            alignment: redisArticle.alignment,
-            durationMs: redisArticle.durationMs,
-            size: redisArticle.audio.length,
-            createdAt: Date.now(),
-          });
-          incrementTtsUsage(auth.userId, auth.isPremium, articleUrl, voiceId, clientIp).catch(() => {});
-          return new Response(
-            JSON.stringify({
-              audioBase64: redisArticle.audio.toString("base64"),
-              alignment: redisArticle.alignment,
-              durationMs: redisArticle.durationMs,
-            }),
-            {
-              headers: {
-                "Content-Type": "application/json",
-                "X-TTS-Usage-Count": String(usage.count + 1),
-                "X-TTS-Usage-Limit": String(usage.limit),
-                "X-TTS-Cache": "redis-article-hit",
-              },
-            },
-          );
-        }
-      }
-
       // --- Split into chunks + compute per-chunk keys ---
       const chunks = splitTTSChunks(cleanedText);
       const chunkKeys = chunks.map((c) => computeChunkKeySync(c, voiceId));
 
-      // --- Check if all chunks are cached (L2 memory + L3 Redis → skip concurrency slot) ---
-      let allCached = chunkKeys.every((key) => chunkCache.get(key) !== null);
-      if (!allCached && ttsRedisCache) {
-        // Check Redis for chunks missing from memory
-        const missingKeys = chunkKeys.filter((key) => chunkCache.get(key) === null);
-        const redisResults = await ttsRedisCache.getBatch(missingKeys);
-        const allRedisHit = redisResults.every((r) => r !== null);
-        if (allRedisHit) {
-          // Promote all Redis hits to memory so generateCombined finds them
-          let mk = 0;
-          for (let i = 0; i < chunkKeys.length; i++) {
-            if (chunkCache.get(chunkKeys[i]) === null) {
-              const hit = redisResults[mk++]!;
-              chunkCache.set(chunkKeys[i], {
-                audio: hit.audio,
-                alignment: hit.alignment,
-                durationMs: hit.durationMs,
-                size: hit.audio.length,
-                createdAt: Date.now(),
-              });
-            }
-          }
-          allCached = true;
-        }
-      }
+      // --- Check if all chunks are cached (L2 memory → skip concurrency slot) ---
+      const allCached = chunkKeys.every((key) => chunkCache.get(key) !== null);
 
       const tracker = startMemoryTrack("tts-synthesis", {
         userId: auth.userId,
@@ -835,7 +731,6 @@ export const ttsRoutes = new Elysia()
         heapTotal: Math.round(memBefore.heapTotal / 1024 / 1024),
         chunkCacheStats: chunkCache.stats,
         articleCacheStats: articleCache.stats,
-        redisCacheStats: ttsRedisCache?.stats,
       }, "TTS pre-synthesis memory snapshot");
 
       /** Helper: build response from generateCombined result and cache at article level */
@@ -868,11 +763,6 @@ export const ttsRoutes = new Elysia()
           size: audioBytes,
           createdAt: Date.now(),
         });
-
-        // Write-through to Redis article cache for cross-device sync (premium only, fire-and-forget)
-        if (ttsRedisCache && auth.isPremium) {
-          ttsRedisCache.setArticle(articleKey, result.audioBuffer, result.alignment, result.durationMs).catch(() => {});
-        }
 
         incrementTtsUsage(auth.userId, auth.isPremium, articleUrl, voiceId, clientIp).catch(() => {});
 
@@ -1012,6 +902,5 @@ export function getTTSCacheStats() {
   return {
     chunks: chunkCache.stats,
     articles: articleCache.stats,
-    redis: ttsRedisCache?.stats ?? { hits: 0, misses: 0, errors: 0, hitRate: 0 },
   };
 }

@@ -341,7 +341,7 @@ export const bypassDetectionRoutes = new Elysia({ prefix: "/api" }).post(
           if (article && typeof article === "object") {
             const updatedArticle = { ...article, bypassStatus: status };
             const compressed = await compressAsync(updatedArticle);
-            await redis.set(articleCacheKey, compressed);
+            await redis.set(articleCacheKey, compressed, { ex: 2 * 24 * 60 * 60 });
             ctx.merge({ article_cache_updated: true });
           }
         }

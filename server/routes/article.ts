@@ -61,6 +61,7 @@ function getUrlWithSource(source: string, url: string): string {
 const HTML_PREVIEW_LIMIT = 50 * 1024; // 50KB preview for bypass detection
 const CONTENT_MAX_SIZE = 500 * 1024; // 500KB max for cleaned article HTML (content field)
 const TEXT_CONTENT_MAX_SIZE = 200 * 1024; // 200KB max for plain text
+const ARTICLE_CACHE_TTL = 2 * 24 * 60 * 60; // 2 days — keeps Upstash under 1GB
 
 /**
  * Build a response article object, stripping full htmlContent and adding a preview.
@@ -107,7 +108,7 @@ async function cacheHtmlContentSeparately(source: string, url: string, htmlConte
     const htmlKey = `html:${source}:${url}`;
     const compressed = await compressAsync(html);
     html = null; // Release the 2MB string — compressed copy is much smaller
-    await redis.set(htmlKey, compressed);
+    await redis.set(htmlKey, compressed, { ex: ARTICLE_CACHE_TTL });
   } catch (err) {
     logger.warn({ source, url_host: (() => { try { return new URL(url).hostname; } catch { return "unknown"; } })(), error: String(err) }, "Failed to cache htmlContent separately");
   } finally {
@@ -132,7 +133,7 @@ async function saveOrReturnLongerArticle(key: string, newArticle: CachedArticle,
         htmlContent: article.htmlContent?.slice(0, HTML_PREVIEW_LIMIT),
       };
       const compressed = await compressAsync(articleForCache);
-      await Promise.all([redis.set(key, compressed), redis.set(metaKey, metadata)]);
+      await Promise.all([redis.set(key, compressed, { ex: ARTICLE_CACHE_TTL }), redis.set(metaKey, metadata, { ex: ARTICLE_CACHE_TTL })]);
     };
 
     let cachedData = existing;
@@ -689,7 +690,7 @@ export const articleRoutes = new Elysia({ prefix: "/api" }).get(
           publishedTime: result.article.publishedTime, image: result.article.image,
         };
         compressAsync({ ...result.article, htmlContent: undefined })
-          .then(compressed => Promise.all([redis.set(cacheKey, compressed), redis.set(metaKey, metadata)]))
+          .then(compressed => Promise.all([redis.set(cacheKey, compressed, { ex: ARTICLE_CACHE_TTL }), redis.set(metaKey, metadata, { ex: ARTICLE_CACHE_TTL })]))
           .catch(() => {});
       };
 
