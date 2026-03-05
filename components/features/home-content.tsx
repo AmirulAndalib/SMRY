@@ -30,7 +30,6 @@ import { getLastUnfinishedArticle, clearReadingProgress } from "@/lib/hooks/use-
 import { FaviconImage } from "@/components/shared/favicon-image";
 import { getSiteConfidence } from "@/lib/data/site-confidence";
 import { SiteConfidenceIndicator } from "@/components/features/site-confidence-indicator";
-import { useAnalytics } from "@/lib/hooks/use-analytics";
 
 // Empty subscribe function for useSyncExternalStore
 const emptySubscribe = () => () => {};
@@ -334,7 +333,7 @@ export const HomeContent = memo(function HomeContent() {
   const inputRef = useRef<HTMLInputElement>(null);
   const { isPremium, isLoading: isPremiumLoading } = useIsPremium();
 
-  const { track } = useAnalytics();
+
 
   const { ad, fireImpression, fireClick } = useGravityAd({
     url: typeof window !== "undefined" ? window.location.href : "https://smry.ai",
@@ -524,7 +523,7 @@ export const HomeContent = memo(function HomeContent() {
                 ad={ad}
                 variant="home"
                 onVisible={() => { fireImpression(ad, "homepage", 0); }}
-                onClick={() => { fireClick(ad, "homepage", 0); track("ad_click", { placement: "homepage", ad_provider: ad.ad_provider }); }}
+                onClick={() => { fireClick(ad, "homepage", 0); }}
               />
             </div>
           )}

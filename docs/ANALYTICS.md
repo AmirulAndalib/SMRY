@@ -14,11 +14,23 @@ Complete reference for all analytics events, setup, and dashboards.
 │                                                                  │
 │  posthog-js SDK (lean config)                                    │
 │  ├── Heatmaps (click positions, scroll depth)                    │
-│  ├── User Identification (Clerk → PostHog identify)              │
-│  └── 7 Custom Events (track() via useAnalytics hook)             │
+│  └── 11 Custom Events (track() via useAnalytics hook)            │
 │                                                                  │
 │  DISABLED: $pageview, $pageleave, autocapture, session recording │
 │  Visitor tracking handled by DataBuddy (separate tool)           │
+├──────────────────────────────────────────────────────────────────┤
+│  Ad Click Tracking                                               │
+│                                                                  │
+│  fireClick() in useGravityAd hook handles BOTH:                  │
+│  ├── /api/px (sendBeacon) → Gravity forwarding + Pino logs       │
+│  └── PostHog track("ad_click") → placement analytics             │
+│  Single call site per placement = no naming drift                │
+├──────────────────────────────────────────────────────────────────┤
+│  Ad Impression Billing (NOT in PostHog)                          │
+│                                                                  │
+│  fireImpression() in useGravityAd hook:                          │
+│  ├── Gravity ads → /api/px → server forwards impUrl pixel        │
+│  └── ZeroClick ads → client POST to zeroclick.dev/api/v2         │
 ├──────────────────────────────────────────────────────────────────┤
 │  Server (Elysia / Bun)                                           │
 │                                                                  │
@@ -33,8 +45,8 @@ Complete reference for all analytics events, setup, and dashboards.
 |------|---------|
 | `components/providers/posthog-provider.tsx` | SDK init, heatmaps enabled |
 | `lib/hooks/use-analytics.ts` | Client hook: `track()`, `trackArticle()` |
-| `components/features/proxy-content.tsx` | `article_loaded`, `article_error`, `ad_click` |
-| `components/features/home-content.tsx` | `ad_click` |
+| `lib/hooks/use-gravity-ad.ts` | `ad_click` (inside `fireClick()` — single source of truth) |
+| `components/features/proxy-content.tsx` | `article_loaded`, `article_error`, `tts_requested` |
 | `components/features/article-chat.tsx` | `chat_message_sent` |
 | `components/features/share-button.tsx` | `article_shared` |
 | `components/features/highlight-toolbar.tsx` | `highlight_created` |
@@ -139,8 +151,10 @@ Fires when ALL sources fail for a URL.
 
 | Property | Type | Description |
 |----------|------|-------------|
-| `placement` | string | UI slot (see placements below) |
+| `placement` | string | UI slot — snake_case (see placements below) |
 | `ad_provider` | string | `zeroclick` or `gravity` |
+
+Tracked inside `fireClick()` in `lib/hooks/use-gravity-ad.ts` — **single source of truth**. Components only call `fireClick(ad, "placement_name", index)`. The hook handles both `/api/px` (billing logs) and PostHog `ad_click` (analytics). This prevents naming drift between billing and analytics.
 
 `ad_impression` is NOT tracked in PostHog — impression billing is handled directly by Gravity/ZeroClick SDKs via `fireImpression()`. Only clicks matter for placement optimization.
 
@@ -259,6 +273,8 @@ function MyComponent() {
   };
 }
 ```
+
+**For ad events:** Do NOT call `track("ad_click")` directly from components. Use `fireClick(ad, "placement_name", index)` from `useGravityAd` — it handles both `/api/px` billing and PostHog analytics in one call. This prevents placement name drift between systems.
 
 ---
 

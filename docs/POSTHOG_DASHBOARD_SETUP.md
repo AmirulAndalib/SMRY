@@ -190,7 +190,13 @@ Example insight: "nytimes.com has 95% success rate, avg latency 2.3s, winning so
 
 ## Dashboard 3: Ad Clicks (revenue optimization)
 
-**Purpose:** "Which ad slots get clicked most? Which provider performs better?"
+**Purpose:** "Which ad slots get clicked most? Which provider performs better? How does ZeroClick compare to Gravity?"
+
+> **Important:** If you see old placement names like `home`, `Homepage`, `Article - Sidebar`, `sidebar`, `inline`, etc., those are historical events from before the March 2026 naming fix. PostHog is write-only — old events can't be renamed. Filter your date range to **after the fix was deployed** to see only clean data. Current placement names are all snake_case (see below).
+
+### How ad click tracking works
+
+`ad_click` events are tracked inside `fireClick()` in `lib/hooks/use-gravity-ad.ts`. This is the **single source of truth** — components only call `fireClick(ad, "placement_name", index)` and the hook handles PostHog tracking. No duplicate tracking possible.
 
 ### Step 1 — Create the dashboard
 
@@ -204,7 +210,20 @@ Example insight: "nytimes.com has 95% success rate, avg latency 2.3s, winning so
 4. Date range: **Last 7 days**
 5. **Save** → name: `Clicks by Placement` → add to `Ad Clicks`
 
-This tells you which ad slots get the most clicks. Placement values are snake_case: `homepage`, `article_sidebar`, `article_inline`, `article_footer`, `chat_top`, `chat_middle`, `chat_input`, `mobile_article_bottom`, `mobile_chat_top`, `mobile_chat_middle`.
+Placement values (all snake_case):
+
+| Placement | Location |
+|-----------|----------|
+| `homepage` | Landing page |
+| `article_sidebar` | Desktop right sidebar |
+| `article_inline` | Mid-article |
+| `article_footer` | End of article |
+| `chat_top` | Above chat messages (desktop) |
+| `chat_middle` | Between chat messages (desktop) |
+| `chat_input` | Above prompt input (desktop) |
+| `mobile_article_bottom` | Fixed bottom bar on mobile article |
+| `mobile_chat_top` | Chat header on mobile |
+| `mobile_chat_middle` | Between chat messages on mobile |
 
 ### Step 3 — "Clicks by Provider"
 
@@ -214,7 +233,7 @@ This tells you which ad slots get the most clicks. Placement values are snake_ca
 4. Date range: **Last 7 days**
 5. **Save** → name: `Clicks by Provider` → add to `Ad Clicks`
 
-Shows ZeroClick vs Gravity performance.
+Shows ZeroClick vs Gravity performance. ZeroClick is the primary ad provider.
 
 ### Step 4 — "Clicks by Device"
 
@@ -226,7 +245,18 @@ Shows ZeroClick vs Gravity performance.
 
 Shows mobile vs tablet vs desktop click rates.
 
-**Dashboard 3 done — 3 cards.**
+### Step 5 — "Clicks by Provider per Placement"
+
+1. **+ Add insight** → **+ New insight** → **Trends**
+2. Event: `ad_click`, Aggregation: **Total count**
+3. **+ Add breakdown** → `placement`
+4. **+ Add breakdown** again → `ad_provider` (double breakdown)
+5. Date range: **Last 7 days**, Display: **Table**
+6. **Save** → name: `Provider per Placement` → add to `Ad Clicks`
+
+Shows which provider gets more clicks per slot — useful for optimizing the ZeroClick/Gravity split.
+
+**Dashboard 3 done — 4 cards.**
 
 ---
 
@@ -408,9 +438,9 @@ Alerts notify you when something breaks or degrades.
 |---|-----------|-------|-----------------|
 | 1 | SMRY Overview | 3 | Is everything working? How many users? |
 | 2 | Top Sites | 7 | Which sites work/fail? Which source wins? |
-| 3 | Ad Clicks | 3 | Which ads get clicked? Revenue optimization |
+| 3 | Ad Clicks | 4 | Which ads get clicked? Provider comparison |
 | 4 | Feature Adoption | 8 | Which features do people use? |
 | 5 | Retention | 2 | Are users coming back? |
 | 6 | Heatmaps | built-in | Where do users click/scroll? |
 
-**Total: 23 insight cards across 5 custom dashboards + built-in heatmaps.**
+**Total: 24 insight cards across 5 custom dashboards + built-in heatmaps.**

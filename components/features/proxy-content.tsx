@@ -1229,9 +1229,9 @@ export function ProxyContent({ url }: ProxyContentProps) {
 
   // Stable ad callbacks for ArticleContent (prevents breaking its React.memo on sidebar toggle)
   const onInlineAdVisible = useCallback(() => { if (inlineAd) { fireImpression(inlineAd, "article_inline", 1); } }, [inlineAd, fireImpression]);
-  const onInlineAdClick = useCallback(() => { if (inlineAd) { fireClick(inlineAd, "article_inline", 1); track("ad_click", { placement: "article_inline", ad_provider: inlineAd.ad_provider }); } }, [inlineAd, fireClick, track]);
+  const onInlineAdClick = useCallback(() => { if (inlineAd) { fireClick(inlineAd, "article_inline", 1); } }, [inlineAd, fireClick]);
   const onFooterAdVisible = useCallback(() => { if (footerAd) { fireImpression(footerAd, "article_footer", 2); } }, [footerAd, fireImpression]);
-  const onFooterAdClick = useCallback(() => { if (footerAd) { fireClick(footerAd, "article_footer", 2); track("ad_click", { placement: "article_footer", ad_provider: footerAd.ad_provider }); } }, [footerAd, fireClick, track]);
+  const onFooterAdClick = useCallback(() => { if (footerAd) { fireClick(footerAd, "article_footer", 2); } }, [footerAd, fireClick]);
 
   // Debug: Log only when ads actually change
   const prevAdKeyRef = useRef("");
@@ -2046,7 +2046,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                     <GravityAd
                       ad={sidebarAd}
                       onVisible={() => { fireImpression(sidebarAd, "article_sidebar", 0); }}
-                      onClick={() => { fireClick(sidebarAd, "article_sidebar", 0); track("ad_click", { placement: "article_sidebar", ad_provider: sidebarAd.ad_provider }); }}
+                      onClick={() => { fireClick(sidebarAd, "article_sidebar", 0); }}
                       onDismiss={() => {
                         fireDismiss(sidebarAd, "article_sidebar", 0);
                         setDesktopAdDismissed(true);
@@ -2112,13 +2112,13 @@ export function ProxyContent({ url }: ProxyContentProps) {
                       activeThreadTitle={_activeThread?.title}
                       headerAd={!isPremium ? chatAd : null}
                       onHeaderAdVisible={chatAd ? () => { fireImpression(chatAd, "chat_top", 3); } : undefined}
-                      onHeaderAdClick={chatAd ? () => { fireClick(chatAd, "chat_top", 3); track("ad_click", { placement: "chat_top", ad_provider: chatAd.ad_provider }); } : undefined}
+                      onHeaderAdClick={chatAd ? () => { fireClick(chatAd, "chat_top", 3); } : undefined}
                       ad={!isPremium ? (inlineAd ?? footerAd) : null}
                       onAdVisible={inlineAd ? () => { fireImpression(inlineAd, "chat_middle", 1); } : footerAd ? () => { fireImpression(footerAd, "chat_middle", 2); } : undefined}
-                      onAdClick={inlineAd ? () => { fireClick(inlineAd, "chat_middle", 1); track("ad_click", { placement: "chat_middle", ad_provider: inlineAd.ad_provider }); } : footerAd ? () => { fireClick(footerAd, "chat_middle", 2); track("ad_click", { placement: "chat_middle", ad_provider: footerAd.ad_provider }); } : undefined}
+                      onAdClick={inlineAd ? () => { fireClick(inlineAd, "chat_middle", 1); } : footerAd ? () => { fireClick(footerAd, "chat_middle", 2); } : undefined}
                       microAd={!isPremium ? microAd : null}
                       onMicroAdVisible={microAd ? () => { fireImpression(microAd, "chat_input", 4); } : undefined}
-                      onMicroAdClick={microAd ? () => { fireClick(microAd, "chat_input", 4); track("ad_click", { placement: "chat_input", ad_provider: microAd.ad_provider }); } : undefined}
+                      onMicroAdClick={microAd ? () => { fireClick(microAd, "chat_input", 4); } : undefined}
                       threads={threads}
                       activeThreadId={currentThreadId}
                       onNewChat={handleNewChat}
@@ -2253,10 +2253,10 @@ export function ProxyContent({ url }: ProxyContentProps) {
                 articleTitle={articleTitle}
                 chatAd={!isPremium ? mobileChatAd : null}
                 onChatAdVisible={mobileChatAd ? () => { fireImpression(mobileChatAd, "mobile_chat_top", gravityAds.indexOf(mobileChatAd)); } : undefined}
-                onChatAdClick={mobileChatAd ? () => { fireClick(mobileChatAd, "mobile_chat_top", gravityAds.indexOf(mobileChatAd)); track("ad_click", { placement: "mobile_chat_top", ad_provider: mobileChatAd.ad_provider }); } : undefined}
+                onChatAdClick={mobileChatAd ? () => { fireClick(mobileChatAd, "mobile_chat_top", gravityAds.indexOf(mobileChatAd)); } : undefined}
                 inlineChatAd={!isPremium ? (inlineAd ?? footerAd) : null}
                 onInlineChatAdVisible={inlineAd ? () => { fireImpression(inlineAd, "mobile_chat_middle", 1); } : footerAd ? () => { fireImpression(footerAd, "mobile_chat_middle", 2); } : undefined}
-                onInlineChatAdClick={inlineAd ? () => { fireClick(inlineAd, "mobile_chat_middle", 1); track("ad_click", { placement: "mobile_chat_middle", ad_provider: inlineAd.ad_provider }); } : footerAd ? () => { fireClick(footerAd, "mobile_chat_middle", 2); track("ad_click", { placement: "mobile_chat_middle", ad_provider: footerAd.ad_provider }); } : undefined}
+                onInlineChatAdClick={inlineAd ? () => { fireClick(inlineAd, "mobile_chat_middle", 1); } : footerAd ? () => { fireClick(footerAd, "mobile_chat_middle", 2); } : undefined}
                 isPremium={isPremium}
                 initialMessages={threadInitialMessages}
                 onMessagesChange={isPremium ? handleMessagesChange : undefined}
@@ -2292,7 +2292,7 @@ export function ProxyContent({ url }: ProxyContentProps) {
                     ad={sidebarAd}
                     variant="mobile"
                     onVisible={() => { fireImpression(sidebarAd, "mobile_article_bottom", 0); }}
-                    onClick={() => { fireClick(sidebarAd, "mobile_article_bottom", 0); track("ad_click", { placement: "mobile_article_bottom", ad_provider: sidebarAd.ad_provider }); }}
+                    onClick={() => { fireClick(sidebarAd, "mobile_article_bottom", 0); }}
                     onDismiss={() => {
                       fireDismiss(sidebarAd, "mobile_article_bottom", 0);
                       setMobileAdDismissed(true);
