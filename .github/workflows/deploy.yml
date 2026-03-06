@@ -30,35 +30,32 @@ jobs:
             docker compose -f docker-compose.prod.yml build
 
             # Rolling restart: classifier first (others depend on it)
-            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate classifier
+            # --no-deps prevents touching other containers
+            docker compose -f docker-compose.prod.yml up -d --no-deps classifier
             echo "Waiting for classifier healthcheck..."
             sleep 12
 
-            # Then api and app (one at a time for minimal disruption)
-            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api
+            # Then api and app (one at a time)
+            docker compose -f docker-compose.prod.yml up -d --no-deps api
             sleep 5
-            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate app
-            sleep 3
+            docker compose -f docker-compose.prod.yml up -d --no-deps app
 
-            # Caddy only needs restart if Caddyfile changed
-            docker compose -f docker-compose.prod.yml up -d --no-deps caddy
+            # NEVER recreate Caddy during deploys — it causes downtime.
+            # Only restart Caddy manually if the Caddyfile changes.
 
             # Verify health
-            sleep 3
+            sleep 5
             for i in 1 2 3; do
               if curl -sf https://api.smry.ai/health | grep -q '"status":"ok"'; then
                 echo "API: healthy"
-                break
+                echo "Deploy complete"
+                docker image prune -f
+                exit 0
               fi
               echo "Attempt $i: waiting..."
               sleep 5
             done
 
-            curl -sf https://api.smry.ai/health | grep -q '"status":"ok"' || {
-              echo "API: unhealthy after retries"
-              docker compose -f docker-compose.prod.yml logs api --tail=20
-              exit 1
-            }
-
-            echo "Deploy complete"
-            docker image prune -f
+            echo "API: unhealthy after retries"
+            docker compose -f docker-compose.prod.yml logs api --tail=20
+            exit 1
