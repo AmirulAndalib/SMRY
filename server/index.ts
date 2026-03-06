@@ -1,5 +1,5 @@
 /**
- * Elysia API Server
+ * Elysia API Server — SMRY
  */
 
 import { Elysia } from "elysia";
