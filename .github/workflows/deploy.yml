@@ -26,37 +26,39 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
-            # Build new images
+            # Build new images (existing containers keep serving traffic)
             docker compose -f docker-compose.prod.yml build
 
             # Rolling restart: classifier first (others depend on it)
-            docker compose -f docker-compose.prod.yml up -d --no-deps classifier
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate classifier
             echo "Waiting for classifier healthcheck..."
             sleep 12
 
-            # Then api and app
-            docker compose -f docker-compose.prod.yml up -d --no-deps api
+            # Then api and app (one at a time for minimal disruption)
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate api
             sleep 5
-            docker compose -f docker-compose.prod.yml up -d --no-deps app
+            docker compose -f docker-compose.prod.yml up -d --no-deps --force-recreate app
             sleep 3
 
-            # Ensure caddy is running
+            # Caddy only needs restart if Caddyfile changed
             docker compose -f docker-compose.prod.yml up -d --no-deps caddy
 
-            # Wait for services to stabilize
-            sleep 5
+            # Verify health
+            sleep 3
+            for i in 1 2 3; do
+              if curl -sf https://api.smry.ai/health | grep -q '"status":"ok"'; then
+                echo "API: healthy"
+                break
+              fi
+              echo "Attempt $i: waiting..."
+              sleep 5
+            done
 
-            # Verify health through Caddy reverse proxy
-            API_HEALTH=$(curl -sf --retry 3 --retry-delay 5 https://api.smry.ai/health 2>/dev/null)
-            if echo "$API_HEALTH" | grep -q '"status":"ok"'; then
-              echo "API: healthy"
-            else
-              echo "API: unhealthy"
+            curl -sf https://api.smry.ai/health | grep -q '"status":"ok"' || {
+              echo "API: unhealthy after retries"
               docker compose -f docker-compose.prod.yml logs api --tail=20
               exit 1
-            fi
+            }
 
             echo "Deploy complete"
-
-            # Cleanup old images
             docker image prune -f
