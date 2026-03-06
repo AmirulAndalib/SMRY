@@ -16,14 +16,17 @@ if [ "$ACTIVE" = "blue" ]; then NEW="green"; else NEW="blue"; fi
 
 echo "Active: $ACTIVE → Deploying: $NEW"
 
-# Ensure shared network exists
+# Ensure shared network exists (Caddy + all app containers share this)
 docker network create smry 2>/dev/null || true
+
+# Ensure Caddy is running (independent of app deploys)
+docker compose -f docker-compose.caddy.yml up -d
 
 # Build new images
 echo "Building images..."
 $COMPOSE build
 
-# Start new stack (joins same "smry" network, same service DNS aliases)
+# Start new classifier first (others depend on it)
 echo "Starting $NEW stack..."
 $COMPOSE -p "smry-$NEW" up -d --no-deps classifier
 echo "Waiting for classifier health..."
@@ -38,7 +41,7 @@ for i in $(seq 1 30); do
   sleep 2
 done
 
-# Start api and app
+# Start api and app (both join the "smry" network with service name aliases)
 $COMPOSE -p "smry-$NEW" up -d --no-deps api app
 echo "Waiting for new services to start..."
 sleep 8
@@ -62,13 +65,16 @@ if [ "$HEALTHY" != "true" ]; then
   exit 1
 fi
 
-# Remove old stack
+# Remove old stack (Caddy stays running, only app containers are swapped)
 echo "Removing old $ACTIVE stack..."
 $COMPOSE -p "smry-$ACTIVE" down 2>/dev/null || true
+
+# Clean up any orphaned project networks (compose creates them even with external)
+docker network rm "smry-${ACTIVE}_smry" 2>/dev/null || true
 
 # Record active slot
 echo "$NEW" > "$ACTIVE_FILE"
 echo "Deploy complete: $NEW is now active"
 
-# Cleanup
+# Cleanup old images
 docker image prune -f
