@@ -43,8 +43,11 @@ jobs:
             # Ensure caddy is running
             docker compose -f docker-compose.prod.yml up -d --no-deps caddy
 
-            # Verify health
-            API_HEALTH=$(curl -sf http://localhost:3001/health 2>/dev/null)
+            # Wait for services to stabilize
+            sleep 5
+
+            # Verify health through Caddy reverse proxy
+            API_HEALTH=$(curl -sf --retry 3 --retry-delay 5 https://api.smry.ai/health 2>/dev/null)
             if echo "$API_HEALTH" | grep -q '"status":"ok"'; then
               echo "API: healthy"
             else
