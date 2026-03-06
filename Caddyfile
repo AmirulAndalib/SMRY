@@ -1,0 +1,7 @@
+smry.ai {
+	reverse_proxy app:3000
+}
+
+api.smry.ai {
+	reverse_proxy api:3001
+}

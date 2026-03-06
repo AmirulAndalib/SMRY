@@ -1,0 +1,100 @@
+# Production deployment for Hetzner VPS
+# Usage: docker compose -f docker-compose.prod.yml up -d
+
+services:
+  # Reverse proxy with automatic HTTPS
+  caddy:
+    image: caddy:2-alpine
+    container_name: smry-caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"  # HTTP/3
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - app
+      - api
+    networks:
+      - smry
+
+  # Next.js frontend
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        INTERNAL_API_URL: http://api:3001
+        NEXT_PUBLIC_API_URL: https://${API_DOMAIN:-api.smry.ai}
+        NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY: ${NEXT_PUBLIC_CLERK_PUBLISHABLE_KEY}
+        NEXT_PUBLIC_CLERK_PATRON_PLAN_ID: ${NEXT_PUBLIC_CLERK_PATRON_PLAN_ID}
+        NEXT_PUBLIC_URL: https://${APP_DOMAIN:-smry.ai}
+        NEXT_PUBLIC_POSTHOG_KEY: ${NEXT_PUBLIC_POSTHOG_KEY}
+        NEXT_PUBLIC_POSTHOG_HOST: ${NEXT_PUBLIC_POSTHOG_HOST:-https://us.i.posthog.com}
+    container_name: smry-app
+    restart: unless-stopped
+    expose:
+      - "3000"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      INTERNAL_API_URL: http://api:3001
+      CLASSIFIER_URL: http://classifier:8000
+      CLASSIFIER_ENABLED: "true"
+    depends_on:
+      classifier:
+        condition: service_healthy
+    networks:
+      - smry
+
+  # Elysia API server
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    container_name: smry-api
+    restart: unless-stopped
+    expose:
+      - "3001"
+    env_file:
+      - .env
+    environment:
+      NODE_ENV: production
+      CORS_ORIGIN: https://${APP_DOMAIN:-smry.ai}
+      CLASSIFIER_URL: http://classifier:8000
+      CLASSIFIER_ENABLED: "true"
+    depends_on:
+      classifier:
+        condition: service_healthy
+    networks:
+      - smry
+
+  # Python/XGBoost article classifier
+  classifier:
+    build:
+      context: ./classifier
+      dockerfile: Dockerfile
+    container_name: smry-classifier
+    restart: unless-stopped
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+    networks:
+      - smry
+
+volumes:
+  caddy_data:
+  caddy_config:
+
+networks:
+  smry:
+    driver: bridge

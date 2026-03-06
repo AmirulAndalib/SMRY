@@ -1,0 +1,58 @@
+name: Deploy to Production
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.DEPLOY_HOST }}
+          username: root
+          key: ${{ secrets.DEPLOY_SSH_KEY }}
+          script_stop: true
+          script: |
+            cd /opt/smry
+            git fetch origin main
+            git reset --hard origin/main
+
+            # Build new images
+            docker compose -f docker-compose.prod.yml build
+
+            # Rolling restart: classifier first (others depend on it)
+            docker compose -f docker-compose.prod.yml up -d --no-deps classifier
+            echo "Waiting for classifier healthcheck..."
+            sleep 12
+
+            # Then api and app
+            docker compose -f docker-compose.prod.yml up -d --no-deps api
+            sleep 5
+            docker compose -f docker-compose.prod.yml up -d --no-deps app
+            sleep 3
+
+            # Ensure caddy is running
+            docker compose -f docker-compose.prod.yml up -d --no-deps caddy
+
+            # Verify health
+            API_HEALTH=$(curl -sf http://localhost:3001/health 2>/dev/null)
+            if echo "$API_HEALTH" | grep -q '"status":"ok"'; then
+              echo "API: healthy"
+            else
+              echo "API: unhealthy"
+              docker compose -f docker-compose.prod.yml logs api --tail=20
+              exit 1
+            fi
+
+            echo "Deploy complete"
+
+            # Cleanup old images
+            docker image prune -f
